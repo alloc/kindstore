@@ -27,6 +27,8 @@ export class KindDefinition<T extends KindDefinitionBag> {
   readonly tag: T["tag"];
   readonly schema: T["schema"];
   version: T["version"];
+  createdAtField?: T["createdAt"];
+  updatedAtField?: T["updatedAt"];
   readonly indexes = new Map<string, IndexDefinition>();
   readonly multiIndexes: MultiIndexDefinition[] = [];
   migrations?: Record<number, KindMigration<KindValue<T>>>;
@@ -48,6 +50,22 @@ export class KindDefinition<T extends KindDefinitionBag> {
       type: options.type ?? current?.type,
     });
     return this as unknown as KindDefinition<Omit<T, "indexed"> & { indexed: T["indexed"] | TKey }>;
+  }
+
+  createdAt<TKey extends keyof KindValue<T> & string>(field: TKey) {
+    if (field === this.updatedAtField) {
+      throw new Error(`Kind "${this.tag}" cannot use "${field}" for both createdAt and updatedAt.`);
+    }
+    this.createdAtField = field as T["createdAt"];
+    return this as unknown as KindDefinition<Omit<T, "createdAt"> & { createdAt: TKey }>;
+  }
+
+  updatedAt<TKey extends keyof KindValue<T> & string>(field: TKey) {
+    if (field === this.createdAtField) {
+      throw new Error(`Kind "${this.tag}" cannot use "${field}" for both createdAt and updatedAt.`);
+    }
+    this.updatedAtField = field as T["updatedAt"];
+    return this as unknown as KindDefinition<Omit<T, "updatedAt"> & { updatedAt: TKey }>;
   }
 
   multi<
@@ -88,6 +106,8 @@ export function kind<const TTag extends string, const TSchema extends z.ZodObjec
     tag: TTag;
     schema: TSchema;
     indexed: never;
+    createdAt: never;
+    updatedAt: never;
     version: 1;
   }>(tag, schema, 1);
 }

@@ -1,3 +1,4 @@
+import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 
@@ -10,6 +11,7 @@ describe("kindstore", () => {
       userId: z.string(),
       status: z.enum(["active", "revoked", "expired"]),
       expiresAt: z.number().int(),
+      createdAt: z.number().int(),
       updatedAt: z.number().int(),
       deviceId: z.string().optional(),
     });
@@ -21,6 +23,8 @@ describe("kindstore", () => {
       connection: { filename },
       metadata: { app: AppMetadata },
       sessions: kind("ses", Session)
+        .createdAt("createdAt")
+        .updatedAt("updatedAt")
         .index("userId")
         .index("status")
         .index("expiresAt", { type: "integer" })
@@ -35,35 +39,28 @@ describe("kindstore", () => {
       userId: "usr_1",
       status: "active",
       expiresAt: now + 10_000,
-      updatedAt: now,
       deviceId: "mobile:ios",
     });
-    db.sessions.put(revokedId, {
+    const revoked = db.sessions.put(revokedId, {
       userId: "usr_1",
       status: "revoked",
       expiresAt: now + 20_000,
-      updatedAt: now - 1,
     });
     expect(activeId.startsWith("ses_")).toBe(true);
+    expect(active.createdAt).toBe(active.updatedAt);
+    expect(revoked.createdAt).toBe(revoked.updatedAt);
     expect(db.sessions.get(activeId)).toEqual(active);
-    expect(
-      db.sessions.findMany({
-        where: {
-          userId: "usr_1",
-          expiresAt: { gt: now },
-        },
-        orderBy: { updatedAt: "desc" },
-        limit: 10,
-      }),
-    ).toEqual([
-      active,
-      {
+    const matching = db.sessions.findMany({
+      where: {
         userId: "usr_1",
-        status: "revoked",
-        expiresAt: now + 20_000,
-        updatedAt: now - 1,
+        expiresAt: { gt: now },
       },
-    ]);
+      orderBy: { expiresAt: "desc" },
+      limit: 10,
+    });
+    expect(matching.map((session) => session.status)).toEqual(["revoked", "active"]);
+    expect(matching[0]?.expiresAt).toBe(now + 20_000);
+    expect(matching[1]?.expiresAt).toBe(now + 10_000);
     expect(
       Array.from(
         db.sessions.iterate({
@@ -75,43 +72,46 @@ describe("kindstore", () => {
     expect(
       db.sessions.update(activeId, {
         status: "expired",
-        updatedAt: now + 5,
       }),
     ).toEqual({
       userId: "usr_1",
       status: "expired",
       expiresAt: now + 10_000,
-      updatedAt: now + 5,
+      createdAt: active.createdAt,
+      updatedAt: expect.any(Number),
       deviceId: "mobile:ios",
     });
+    const afterPatch = db.sessions.get(activeId)!;
+    expect(afterPatch.createdAt).toBe(active.createdAt);
+    expect(afterPatch.updatedAt).toBeGreaterThanOrEqual(active.updatedAt);
     expect(
       db.sessions.update(activeId, (current) => ({
         ...current,
         status: "active",
-        updatedAt: now + 6,
+        createdAt: 1,
+        updatedAt: 1,
       })),
     ).toEqual({
       userId: "usr_1",
       status: "active",
       expiresAt: now + 10_000,
-      updatedAt: now + 6,
+      createdAt: active.createdAt,
+      updatedAt: expect.any(Number),
       deviceId: "mobile:ios",
     });
-    const timestampsBefore = db.raw
-      .query(`SELECT "created_at", "updated_at" FROM "sessions" WHERE "id" = ?`)
-      .get(activeId) as { created_at: number; updated_at: number };
-    db.sessions.put(activeId, {
+    const afterFunction = db.sessions.get(activeId)!;
+    expect(afterFunction.createdAt).toBe(active.createdAt);
+    expect(afterFunction.updatedAt).toBeGreaterThanOrEqual(afterPatch.updatedAt);
+    const overwritten = db.sessions.put(activeId, {
       userId: "usr_1",
       status: "active",
       expiresAt: now + 30_000,
-      updatedAt: now + 7,
+      createdAt: 1,
+      updatedAt: 1,
       deviceId: "mobile:ios",
     });
-    const timestampsAfter = db.raw
-      .query(`SELECT "created_at", "updated_at" FROM "sessions" WHERE "id" = ?`)
-      .get(activeId) as { created_at: number; updated_at: number };
-    expect(timestampsAfter.created_at).toBe(timestampsBefore.created_at);
-    expect(timestampsAfter.updated_at).toBeGreaterThanOrEqual(timestampsBefore.updated_at);
+    expect(overwritten.createdAt).toBe(active.createdAt);
+    expect(overwritten.updatedAt).toBeGreaterThanOrEqual(afterFunction.updatedAt);
     expect(db.metadata.get("app")).toBeUndefined();
     expect(
       db.metadata.set("app", {
@@ -142,6 +142,11 @@ describe("kindstore", () => {
       db.raw.query(`SELECT count(*) AS count FROM "sessions" WHERE "user_id" = ?`).get("usr_1"),
     ).toEqual({ count: 1 });
     expect(
+      (db.raw.query(`PRAGMA table_xinfo('sessions')`).all() as { name: string }[]).map(
+        (column) => column.name,
+      ),
+    ).toEqual(["id", "payload", "user_id", "status", "expires_at", "updated_at", "device_id"]);
+    expect(
       db.raw
         .query(`SELECT "name" FROM "sqlite_master" WHERE "type" = 'table' ORDER BY "name" ASC`)
         .all(),
@@ -156,7 +161,7 @@ describe("kindstore", () => {
       db.raw
         .query(`SELECT "payload" FROM "__kindstore_internal" WHERE "key" = 'store_format_version'`)
         .get(),
-    ).toEqual({ payload: "1" });
+    ).toEqual({ payload: "2" });
     expect(
       db.raw
         .query(`SELECT "payload" FROM "__kindstore_internal" WHERE "key" = 'kind_versions'`)
@@ -167,13 +172,15 @@ describe("kindstore", () => {
         .query(`SELECT "payload" FROM "__kindstore_internal" WHERE "key" = 'schema_snapshot'`)
         .get(),
     ).toEqual({
-      payload: expect.stringContaining('"kindstoreVersion":1'),
+      payload: expect.stringContaining('"kindstoreVersion":2'),
     });
 
     const mirrored = kindstore({
       connection: { filename },
       metadata: { app: AppMetadata },
       sessions: kind("ses", Session)
+        .createdAt("createdAt")
+        .updatedAt("updatedAt")
         .index("userId")
         .index("status")
         .index("expiresAt", { type: "integer" })
@@ -185,7 +192,8 @@ describe("kindstore", () => {
       userId: "usr_1",
       status: "active",
       expiresAt: now + 30_000,
-      updatedAt: now + 7,
+      createdAt: active.createdAt,
+      updatedAt: overwritten.updatedAt,
       deviceId: "mobile:ios",
     });
     expect(mirrored.metadata.get("app")).toEqual({
@@ -196,7 +204,7 @@ describe("kindstore", () => {
       mirrored.raw
         .query(`SELECT "payload" FROM "__kindstore_internal" WHERE "key" = 'store_format_version'`)
         .get(),
-    ).toEqual({ payload: "1" });
+    ).toEqual({ payload: "2" });
     mirrored.close();
     db.close();
   });
@@ -221,13 +229,13 @@ describe("kindstore", () => {
     const migrated = kindstore({
       connection: { filename },
       tasks: kind("tsk", TaskV2)
+        .updatedAt("updatedAt")
         .index("status")
         .index("updatedAt", { type: "integer" })
         .migrate(2, {
-          1: (value, context) => ({
+          1: (value) => ({
             ...value,
             status: "open",
-            updatedAt: context.now,
           }),
         }),
     });
@@ -253,6 +261,11 @@ describe("kindstore", () => {
     ).toEqual({
       payload: expect.stringContaining('"tasks"'),
     });
+    expect(
+      migrated.raw
+        .query(`SELECT "payload" FROM "__kindstore_internal" WHERE "key" = 'store_format_version'`)
+        .get(),
+    ).toEqual({ payload: "2" });
     migrated.close();
     initial.close();
   });
@@ -319,6 +332,89 @@ describe("kindstore", () => {
     db.close();
   });
 
+  test("rejects invalid managed timestamp declarations", () => {
+    const filename = `file:kindstore-bad-timestamps-${crypto.randomUUID()}?mode=memory&cache=shared`;
+    expect(() =>
+      kindstore({
+        connection: { filename },
+        sessions: kind(
+          "ses",
+          z.object({
+            createdAt: z.string(),
+          }),
+        ).createdAt("createdAt"),
+      }),
+    ).toThrow('createdAt field "createdAt" must be an integer');
+    expect(() =>
+      kind("ses", z.object({ timestamp: z.number().int() }))
+        .createdAt("timestamp")
+        .updatedAt("timestamp"),
+    ).toThrow('cannot use "timestamp" for both createdAt and updatedAt');
+  });
+
+  test("upgrades v1 stores away from hidden kind row timestamps", () => {
+    const filename = `file:kindstore-format-upgrade-${crypto.randomUUID()}?mode=memory&cache=shared`;
+    const raw = new Database(filename);
+    raw.run(
+      `CREATE TABLE "__kindstore_internal" (
+        "key" TEXT PRIMARY KEY NOT NULL,
+        "payload" TEXT NOT NULL,
+        "updated_at" INTEGER NOT NULL
+      ) STRICT`,
+    );
+    raw.run(
+      `CREATE TABLE "sessions" (
+        "id" TEXT PRIMARY KEY NOT NULL,
+        "payload" TEXT NOT NULL,
+        "created_at" INTEGER NOT NULL,
+        "updated_at" INTEGER NOT NULL
+      ) STRICT`,
+    );
+    raw
+      .query(`INSERT INTO "__kindstore_internal" ("key", "payload", "updated_at") VALUES (?, ?, ?)`)
+      .run("store_format_version", "1", 1);
+    raw
+      .query(`INSERT INTO "__kindstore_internal" ("key", "payload", "updated_at") VALUES (?, ?, ?)`)
+      .run("kind_versions", '{"sessions":1}', 1);
+    raw
+      .query(`INSERT INTO "__kindstore_internal" ("key", "payload", "updated_at") VALUES (?, ?, ?)`)
+      .run(
+        "schema_snapshot",
+        '{"kindstoreVersion":1,"kinds":{"sessions":{"tag":"ses","table":"sessions","version":1,"columns":{},"indexes":{}}}}',
+        1,
+      );
+    raw
+      .query(
+        `INSERT INTO "sessions" ("id", "payload", "created_at", "updated_at") VALUES (?, ?, ?, ?)`,
+      )
+      .run("ses_legacy", '{"userId":"usr_1","status":"active"}', 10, 20);
+
+    const Session = z.object({
+      userId: z.string(),
+      status: z.enum(["active", "revoked", "expired"]),
+    });
+    const db = kindstore({
+      connection: { filename },
+      sessions: kind("ses", Session).index("userId").index("status"),
+    });
+    expect(db.sessions.get("ses_legacy" as never)).toEqual({
+      userId: "usr_1",
+      status: "active",
+    });
+    expect(
+      (db.raw.query(`PRAGMA table_xinfo('sessions')`).all() as { name: string }[]).map(
+        (column) => column.name,
+      ),
+    ).toEqual(["id", "payload", "user_id", "status"]);
+    expect(
+      db.raw
+        .query(`SELECT "payload" FROM "__kindstore_internal" WHERE "key" = 'store_format_version'`)
+        .get(),
+    ).toEqual({ payload: "2" });
+    db.close();
+    raw.close();
+  });
+
   test("reconciles stale derived indexes and generated columns from the previous snapshot", () => {
     const filename = `file:kindstore-reconcile-${crypto.randomUUID()}?mode=memory&cache=shared`;
     const Session = z.object({
@@ -354,7 +450,7 @@ describe("kindstore", () => {
       (narrowed.raw.query(`PRAGMA table_xinfo('sessions')`).all() as { name: string }[]).map(
         (column) => column.name,
       ),
-    ).toEqual(["id", "payload", "created_at", "updated_at", "user_id", "status"]);
+    ).toEqual(["id", "payload", "user_id", "status"]);
     expect(
       (
         narrowed.raw

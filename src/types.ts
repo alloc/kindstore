@@ -15,10 +15,23 @@ export type KindDefinitionBag = {
   tag: string;
   schema: z.ZodObject<any>;
   indexed: string;
+  createdAt: string;
+  updatedAt: string;
   version: number;
 };
 
 export type KindValue<T extends KindDefinitionBag> = z.output<T["schema"]>;
+
+type KindManagedTimestampField<T extends KindDefinitionBag> = Extract<
+  T["createdAt"] | T["updatedAt"],
+  keyof KindValue<T> & string
+>;
+
+export type KindInputValue<T extends KindDefinitionBag> = Omit<
+  KindValue<T>,
+  KindManagedTimestampField<T>
+> &
+  Partial<Pick<KindValue<T>, KindManagedTimestampField<T>>>;
 
 export type KindId<T extends KindDefinitionBag> = TaggedId<T["tag"]>;
 

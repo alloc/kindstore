@@ -8,6 +8,7 @@ import type {
   IndexDirection,
   KindDefinitionBag,
   KindId,
+  KindInputValue,
   KindMigrationContext,
   KindRegistry,
   KindValue,
@@ -32,7 +33,7 @@ import {
   snakeCase,
 } from "./util";
 
-const KINDSTORE_FORMAT_VERSION = 1;
+const KINDSTORE_FORMAT_VERSION = 2;
 const INTERNAL_TABLE = "__kindstore_internal";
 const APP_METADATA_TABLE = "__kindstore_app_metadata";
 const LEGACY_KIND_VERSIONS_TABLE = "__kindstore_kind_versions";
@@ -41,14 +42,12 @@ const STORE_FORMAT_VERSION_KEY = "store_format_version";
 const KIND_VERSIONS_KEY = "kind_versions";
 const SCHEMA_SNAPSHOT_KEY = "schema_snapshot";
 const RESERVED_STORE_KEYS = new Set(["batch", "close", "connection", "metadata", "raw"]);
-const RESERVED_COLUMN_NAMES = new Set(["id", "payload", "created_at", "updated_at"]);
+const RESERVED_COLUMN_NAMES = new Set(["id", "payload"]);
 const nextUlid = monotonicFactory();
 
 type StoredRow = {
   id: string;
   payload: string;
-  created_at: number;
-  updated_at: number;
 };
 
 type IndexColumn = {
@@ -62,6 +61,8 @@ type KindRuntimeDefinition<T extends KindDefinitionBag> = {
   key: string;
   table: string;
   columns: Map<string, IndexColumn>;
+  createdAtField?: T["createdAt"];
+  updatedAtField?: T["updatedAt"];
   definition: KindDefinition<T>;
 };
 
@@ -105,11 +106,13 @@ type CompiledQuery = {
 type KindCollectionSurface<T extends KindDefinitionBag> = {
   newId(): KindId<T>;
   get(id: KindId<T>): KindValue<T> | undefined;
-  put(id: KindId<T>, value: KindValue<T>): KindValue<T>;
+  put(id: KindId<T>, value: KindInputValue<T>): KindValue<T>;
   delete(id: KindId<T>): boolean;
   update(
     id: KindId<T>,
-    updater: PatchValue<KindValue<T>> | ((current: KindValue<T>) => KindValue<T>),
+    updater:
+      | PatchValue<KindInputValue<T>>
+      | ((current: KindValue<T>) => KindInputValue<T>),
   ): KindValue<T> | undefined;
   first(options?: FindManyOptions<T>): KindValue<T> | undefined;
   findMany(options?: FindManyOptions<T>): KindValue<T>[];
@@ -258,9 +261,51 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
       );
     }
     if (version < KINDSTORE_FORMAT_VERSION) {
-      throw new Error(
-        `Store format version ${version} is older than supported version ${KINDSTORE_FORMAT_VERSION}.`,
+      this.migrateStoreFormat(version);
+      this.internal.set(STORE_FORMAT_VERSION_KEY, KINDSTORE_FORMAT_VERSION);
+    }
+  }
+
+  private migrateStoreFormat(version: number) {
+    for (let currentVersion = version; currentVersion < KINDSTORE_FORMAT_VERSION; currentVersion++) {
+      switch (currentVersion) {
+        case 1:
+          this.migrateStoreFormat1To2();
+          break;
+        default:
+          throw new Error(
+            `Store format version ${currentVersion} cannot be upgraded to ${KINDSTORE_FORMAT_VERSION}.`,
+          );
+      }
+    }
+  }
+
+  private migrateStoreFormat1To2() {
+    const tables = new Set<string>();
+    const snapshot = this.internal.getSchemaSnapshot();
+    for (const kind of Object.values(snapshot?.kinds ?? {})) {
+      tables.add(kind.table);
+    }
+    for (const definition of this.kinds.values()) {
+      tables.add(definition.table);
+    }
+    for (const table of tables) {
+      if (!this.hasTable(table)) {
+        continue;
+      }
+      const columns = new Set(
+        (
+          this.database.query(`PRAGMA table_xinfo(${quoteString(table)})`).all() as {
+            name: string;
+          }[]
+        ).map((column) => column.name),
       );
+      if (columns.has("created_at")) {
+        this.database.run(`ALTER TABLE ${quoteIdentifier(table)} DROP COLUMN "created_at"`);
+      }
+      if (columns.has("updated_at")) {
+        this.database.run(`ALTER TABLE ${quoteIdentifier(table)} DROP COLUMN "updated_at"`);
+      }
     }
   }
 
@@ -428,9 +473,7 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
     this.database.run(
       `CREATE TABLE IF NOT EXISTS ${quoteIdentifier(definition.table)} (
         "id" TEXT PRIMARY KEY NOT NULL,
-        "payload" TEXT NOT NULL,
-        "created_at" INTEGER NOT NULL,
-        "updated_at" INTEGER NOT NULL
+        "payload" TEXT NOT NULL
       ) STRICT`,
     );
   }
@@ -535,15 +578,13 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
       );
     }
     const updateRow = this.database.query(
-      `UPDATE ${quoteIdentifier(definition.table)} SET "payload" = ?, "updated_at" = ? WHERE "id" = ?`,
+      `UPDATE ${quoteIdentifier(definition.table)} SET "payload" = ? WHERE "id" = ?`,
     );
     this.database.transaction(() => {
       const now = Date.now();
       const context: KindMigrationContext = { now };
       for (const row of this.database
-        .query(
-          `SELECT "id", "payload", "created_at", "updated_at" FROM ${quoteIdentifier(definition.table)} ORDER BY "id" ASC`,
-        )
+        .query(`SELECT "id", "payload" FROM ${quoteIdentifier(definition.table)} ORDER BY "id" ASC`)
         .iterate() as IterableIterator<StoredRow>) {
         let value = parsePayload(row.payload);
         for (
@@ -562,10 +603,38 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
             unknown
           >;
         }
-        updateRow.run(JSON.stringify(definition.definition.schema.parse(value)), now, row.id);
+        updateRow.run(
+          JSON.stringify(
+            this.applyManagedTimestamps(definition, value, parsePayload(row.payload), now, false),
+          ),
+          row.id,
+        );
       }
       this.internal.setKindVersion(definition.key, definition.definition.version);
     })();
+  }
+
+  private applyManagedTimestamps<T extends KindDefinitionBag>(
+    definition: KindRuntimeDefinition<T>,
+    value: Record<string, unknown>,
+    current: Record<string, unknown> | undefined,
+    now: number,
+    insert: boolean,
+  ) {
+    const next = { ...value };
+    if (definition.createdAtField) {
+      if (current && Object.hasOwn(current, definition.createdAtField)) {
+        next[definition.createdAtField] = current[definition.createdAtField];
+      } else if (insert) {
+        next[definition.createdAtField] = now;
+      } else {
+        delete next[definition.createdAtField];
+      }
+    }
+    if (definition.updatedAtField) {
+      next[definition.updatedAtField] = now;
+    }
+    return definition.definition.schema.parse(next);
   }
 }
 
@@ -581,18 +650,16 @@ class KindCollectionRuntime<T extends KindDefinitionBag> implements KindCollecti
     this.database = database;
     this.definition = definition;
     this.getStatement = database.query(
-      `SELECT "id", "payload", "created_at", "updated_at" FROM ${quoteIdentifier(definition.table)} WHERE "id" = ?`,
+      `SELECT "id", "payload" FROM ${quoteIdentifier(definition.table)} WHERE "id" = ?`,
     );
     this.putStatement = database.query(
-      `INSERT INTO ${quoteIdentifier(definition.table)} ("id", "payload", "created_at", "updated_at") VALUES (?, ?, ?, ?)
-       ON CONFLICT("id") DO UPDATE SET "payload" = excluded."payload", "updated_at" = excluded."updated_at"`,
+      `INSERT INTO ${quoteIdentifier(definition.table)} ("id", "payload") VALUES (?, ?)
+       ON CONFLICT("id") DO UPDATE SET "payload" = excluded."payload"`,
     );
     this.deleteStatement = database.query(
       `DELETE FROM ${quoteIdentifier(definition.table)} WHERE "id" = ?`,
     );
-    this.updateStatement = database.query(
-      `UPDATE ${quoteIdentifier(definition.table)} SET "payload" = ?, "updated_at" = ? WHERE "id" = ?`,
-    );
+    this.updateStatement = database.query(`UPDATE ${quoteIdentifier(definition.table)} SET "payload" = ? WHERE "id" = ?`);
   }
 
   newId() {
@@ -605,12 +672,14 @@ class KindCollectionRuntime<T extends KindDefinitionBag> implements KindCollecti
     return row ? this.parseRow(row) : undefined;
   }
 
-  put(id: KindId<T>, value: KindValue<T>) {
+  put(id: KindId<T>, value: KindInputValue<T>) {
     assertTaggedId(this.definition.definition.tag, id);
-    const parsed = this.definition.definition.schema.parse(value);
-    const now = Date.now();
-    this.putStatement.run(id, JSON.stringify(parsed), now, now);
-    return parsed;
+    return this.database.transaction(() => {
+      const row = this.getStatement.get(id) as StoredRow | undefined;
+      const parsed = this.applyManagedTimestamps(value as Record<string, unknown>, row, Date.now(), !row);
+      this.putStatement.run(id, JSON.stringify(parsed));
+      return parsed;
+    })();
   }
 
   delete(id: KindId<T>) {
@@ -620,7 +689,9 @@ class KindCollectionRuntime<T extends KindDefinitionBag> implements KindCollecti
 
   update(
     id: KindId<T>,
-    updater: PatchValue<KindValue<T>> | ((current: KindValue<T>) => KindValue<T>),
+    updater:
+      | PatchValue<KindInputValue<T>>
+      | ((current: KindValue<T>) => KindInputValue<T>),
   ) {
     assertTaggedId(this.definition.definition.tag, id);
     return this.database.transaction(() => {
@@ -629,11 +700,15 @@ class KindCollectionRuntime<T extends KindDefinitionBag> implements KindCollecti
         return undefined;
       }
       const current = this.parseRow(row);
-      const parsed =
+      const parsed = this.applyManagedTimestamps(
         typeof updater === "function"
-          ? this.definition.definition.schema.parse(updater(current))
-          : this.definition.definition.schema.parse({ ...current, ...updater });
-      this.updateStatement.run(JSON.stringify(parsed), Date.now(), id);
+          ? (updater(current) as Record<string, unknown>)
+          : ({ ...current, ...updater } as Record<string, unknown>),
+        row,
+        Date.now(),
+        false,
+      );
+      this.updateStatement.run(JSON.stringify(parsed), id);
       return parsed;
     })();
   }
@@ -665,6 +740,29 @@ class KindCollectionRuntime<T extends KindDefinitionBag> implements KindCollecti
     return this.definition.definition.schema.parse(parsePayload(row.payload));
   }
 
+  private applyManagedTimestamps(
+    value: Record<string, unknown>,
+    row: StoredRow | undefined,
+    now: number,
+    insert: boolean,
+  ) {
+    const current = row ? parsePayload(row.payload) : undefined;
+    const next = { ...value };
+    if (this.definition.createdAtField) {
+      if (current && Object.hasOwn(current, this.definition.createdAtField)) {
+        next[this.definition.createdAtField] = current[this.definition.createdAtField];
+      } else if (insert) {
+        next[this.definition.createdAtField] = now;
+      } else {
+        delete next[this.definition.createdAtField];
+      }
+    }
+    if (this.definition.updatedAtField) {
+      next[this.definition.updatedAtField] = now;
+    }
+    return this.definition.definition.schema.parse(next);
+  }
+
   private compileSelect(options: FindManyOptions<T>) {
     if (options.limit != null && (!Number.isInteger(options.limit) || options.limit < 0)) {
       throw new Error(
@@ -674,7 +772,7 @@ class KindCollectionRuntime<T extends KindDefinitionBag> implements KindCollecti
     const where = compileWhere(this.definition.columns, options.where);
     const orderBy = compileOrderBy(this.definition.columns, options.orderBy);
     return {
-      sql: `SELECT "id", "payload", "created_at", "updated_at" FROM ${quoteIdentifier(this.definition.table)}${where.sql}${orderBy}${options.limit == null ? "" : " LIMIT ?"}`,
+      sql: `SELECT "id", "payload" FROM ${quoteIdentifier(this.definition.table)}${where.sql}${orderBy}${options.limit == null ? "" : " LIMIT ?"}`,
       values: options.limit == null ? where.values : [...where.values, options.limit],
     };
   }
@@ -993,12 +1091,22 @@ function normalizeKinds<TKinds extends KindRegistry>(kinds: TKinds) {
     if (seenTables.has(table)) {
       throw new Error(`Kind key "${key}" collides with an existing table name.`);
     }
+    const shape = value.schema.shape as Record<string, unknown>;
+    if (value.createdAtField && value.createdAtField === value.updatedAtField) {
+      throw new Error(
+        `Kind "${value.tag}" cannot use "${value.createdAtField}" for both createdAt and updatedAt.`,
+      );
+    }
+    validateManagedTimestampField(value, shape, value.createdAtField, "createdAt");
+    validateManagedTimestampField(value, shape, value.updatedAtField, "updatedAt");
     seenTags.add(value.tag);
     seenTables.add(table);
     definitions.set(key, {
       key,
       table,
       columns: normalizeColumns(value),
+      createdAtField: value.createdAtField,
+      updatedAtField: value.updatedAtField,
       definition: value,
     });
   }
@@ -1052,6 +1160,21 @@ function normalizeColumns<T extends KindDefinitionBag>(definition: KindDefinitio
 function assertTopLevelField(tag: string, shape: Record<string, unknown>, field: string) {
   if (!(field in shape)) {
     throw new Error(`Kind "${tag}" references unknown field "${field}".`);
+  }
+}
+
+function validateManagedTimestampField<T extends KindDefinitionBag>(
+  definition: KindDefinition<T>,
+  shape: Record<string, unknown>,
+  field: string | undefined,
+  name: "createdAt" | "updatedAt",
+) {
+  if (!field) {
+    return;
+  }
+  assertTopLevelField(definition.tag, shape, field);
+  if (inferSqliteType(shape[field], definition.tag, field) !== "integer") {
+    throw new Error(`Kind "${definition.tag}" ${name} field "${field}" must be an integer.`);
   }
 }
 

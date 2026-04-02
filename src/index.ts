@@ -8,6 +8,7 @@ export type {
   IndexDirection,
   KindDefinitionBag,
   KindId,
+  KindInputValue,
   KindIndexedField,
   KindMigration,
   KindMigrationContext,
