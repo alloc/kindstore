@@ -4,6 +4,8 @@ export { kindstore } from "./store";
 export type {
   ConnectionConfig,
   FilterOperators,
+  FindPageOptions,
+  FindPageResult,
   FindManyOptions,
   IndexDirection,
   KindDefinitionBag,
@@ -13,6 +15,7 @@ export type {
   KindMigration,
   KindMigrationContext,
   KindOrderBy,
+  KindPageCursor,
   KindRegistry,
   KindValue,
   KindWhere,

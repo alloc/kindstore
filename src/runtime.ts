@@ -4,12 +4,15 @@ import { monotonicFactory } from "ulid";
 import { KindDefinition } from "./kind";
 import type {
   ConnectionConfig,
+  FindPageOptions,
+  FindPageResult,
   FindManyOptions,
   IndexDirection,
   KindDefinitionBag,
   KindId,
   KindInputValue,
   KindMigrationContext,
+  KindPageCursor,
   KindRegistry,
   KindValue,
   KindWhere,
@@ -44,6 +47,7 @@ const SCHEMA_SNAPSHOT_KEY = "schema_snapshot";
 const RESERVED_STORE_KEYS = new Set(["batch", "close", "connection", "metadata", "raw"]);
 const RESERVED_COLUMN_NAMES = new Set(["id", "payload"]);
 const nextUlid = monotonicFactory();
+const PAGE_CURSOR_VERSION = 1;
 
 type StoredRow = {
   id: string;
@@ -103,6 +107,20 @@ type CompiledQuery = {
   values: any[];
 };
 
+type ResolvedOrderByEntry = {
+  field: string;
+  direction: IndexDirection;
+  column: IndexColumn;
+};
+
+type PageCursorPayload = {
+  version: typeof PAGE_CURSOR_VERSION;
+  tag: string;
+  order: Array<readonly [field: string, direction: IndexDirection]>;
+  values: unknown[];
+  id: string;
+};
+
 type KindCollectionSurface<T extends KindDefinitionBag> = {
   newId(): KindId<T>;
   get(id: KindId<T>): KindValue<T> | undefined;
@@ -116,6 +134,7 @@ type KindCollectionSurface<T extends KindDefinitionBag> = {
   ): KindValue<T> | undefined;
   first(options?: FindManyOptions<T>): KindValue<T> | undefined;
   findMany(options?: FindManyOptions<T>): KindValue<T>[];
+  findPage(options: FindPageOptions<T>): FindPageResult<T>;
   iterate(options?: FindManyOptions<T>): IterableIterator<KindValue<T>>;
 };
 
@@ -727,6 +746,33 @@ class KindCollectionRuntime<T extends KindDefinitionBag> implements KindCollecti
     return Array.from(this.iterate(options));
   }
 
+  findPage(options: FindPageOptions<T>) {
+    if (!Number.isInteger(options.limit) || options.limit < 1) {
+      throw new Error(
+        `Query limit for kind "${this.definition.key}" must be a positive integer when using findPage().`,
+      );
+    }
+    const orderEntries = resolveOrderBy(this.definition.columns, options.orderBy);
+    if (!orderEntries.length) {
+      throw new Error(`findPage() for kind "${this.definition.key}" requires an explicit orderBy.`);
+    }
+    const where = mergeWhereClauses(
+      compileWhere(this.definition.columns, options.where),
+      compilePageAfter(this.definition, orderEntries, options.after),
+    );
+    const sql = `SELECT "id", "payload" FROM ${quoteIdentifier(this.definition.table)}${where.sql}${compileOrderBy(orderEntries, true)} LIMIT ?`;
+    const rows = this.database.query(sql).all(...where.values, options.limit + 1) as StoredRow[];
+    const pageRows = rows.slice(0, options.limit);
+    const items = pageRows.map((row) => this.parseRow(row));
+    if (rows.length <= options.limit || !pageRows.length) {
+      return { items };
+    }
+    return {
+      items,
+      next: encodePageCursor(this.definition, orderEntries, pageRows[pageRows.length - 1]!, items.at(-1)!),
+    };
+  }
+
   *iterate(options: FindManyOptions<T> = {}) {
     const compiled = this.compileSelect(options);
     for (const row of this.database
@@ -770,7 +816,7 @@ class KindCollectionRuntime<T extends KindDefinitionBag> implements KindCollecti
       );
     }
     const where = compileWhere(this.definition.columns, options.where);
-    const orderBy = compileOrderBy(this.definition.columns, options.orderBy);
+    const orderBy = compileOrderBy(resolveOrderBy(this.definition.columns, options.orderBy));
     return {
       sql: `SELECT "id", "payload" FROM ${quoteIdentifier(this.definition.table)}${where.sql}${orderBy}${options.limit == null ? "" : " LIMIT ?"}`,
       values: options.limit == null ? where.values : [...where.values, options.limit],
@@ -1263,25 +1309,193 @@ function compileWhere<T extends KindDefinitionBag>(
   };
 }
 
-function compileOrderBy(
+function mergeWhereClauses(...clauses: CompiledQuery[]) {
+  const parts: string[] = [];
+  const values: any[] = [];
+  for (const clause of clauses) {
+    if (!clause.sql) {
+      continue;
+    }
+    parts.push(clause.sql.replace(/^ WHERE /, ""));
+    values.push(...clause.values);
+  }
+  return {
+    sql: parts.length ? ` WHERE ${parts.join(" AND ")}` : "",
+    values,
+  };
+}
+
+function resolveOrderBy(
   columns: Map<string, IndexColumn>,
   orderBy: Record<string, IndexDirection | undefined> | undefined,
 ) {
   if (!orderBy || !Object.keys(orderBy).length) {
+    return [];
+  }
+  return Object.entries(orderBy).map(([field, direction]) => {
+    if (!direction) {
+      throw new Error(`Order direction for "${field}" is required.`);
+    }
+    const column = columns.get(field);
+    if (!column) {
+      throw new Error(`Field "${field}" is not indexed and cannot be ordered.`);
+    }
+    return { field, direction, column };
+  });
+}
+
+function tieBreakerDirection(orderBy: ResolvedOrderByEntry[]) {
+  return orderBy[orderBy.length - 1]!.direction;
+}
+
+function compileOrderBy(orderBy: ResolvedOrderByEntry[], includeIdTieBreaker = false) {
+  if (!orderBy.length) {
     return "";
   }
-  return ` ORDER BY ${Object.entries(orderBy)
-    .map(([field, direction]) => {
-      if (!direction) {
-        throw new Error(`Order direction for "${field}" is required.`);
+  const parts = orderBy.map(
+    ({ column, direction }) => `${quoteIdentifier(column.column)} ${direction.toUpperCase()}`,
+  );
+  if (includeIdTieBreaker) {
+    parts.push(`"id" ${tieBreakerDirection(orderBy).toUpperCase()}`);
+  }
+  return ` ORDER BY ${parts.join(", ")}`;
+}
+
+function compilePageAfter<T extends KindDefinitionBag>(
+  definition: KindRuntimeDefinition<T>,
+  orderBy: ResolvedOrderByEntry[],
+  after: KindPageCursor<T> | undefined,
+) {
+  if (!after) {
+    return { sql: "", values: [] };
+  }
+  const cursor = decodePageCursor(after);
+  if (cursor.version !== PAGE_CURSOR_VERSION) {
+    throw new Error(`Unsupported findPage() cursor version "${cursor.version}".`);
+  }
+  if (cursor.tag !== definition.definition.tag) {
+    throw new Error(`findPage() cursor does not belong to kind "${definition.key}".`);
+  }
+  if (cursor.order.length !== orderBy.length) {
+    throw new Error(`findPage() cursor does not match the requested orderBy for kind "${definition.key}".`);
+  }
+  for (const [index, [field, direction]] of cursor.order.entries()) {
+    const expected = orderBy[index]!;
+    if (field !== expected.field || direction !== expected.direction) {
+      throw new Error(
+        `findPage() cursor does not match the requested orderBy for kind "${definition.key}".`,
+      );
+    }
+  }
+  if (cursor.values.length !== orderBy.length) {
+    throw new Error(`findPage() cursor is malformed for kind "${definition.key}".`);
+  }
+  const disjuncts: string[] = [];
+  const values: unknown[] = [];
+  for (let pivot = 0; pivot < orderBy.length; pivot += 1) {
+    const parts: string[] = [];
+    for (let index = 0; index < pivot; index += 1) {
+      const value = cursor.values[index];
+      if (value == null) {
+        throw new Error(
+          `findPage() cursor cannot continue on nullish ordered field "${orderBy[index]!.field}".`,
+        );
       }
-      const column = columns.get(field);
-      if (!column) {
-        throw new Error(`Field "${field}" is not indexed and cannot be ordered.`);
-      }
-      return `${quoteIdentifier(column.column)} ${direction.toUpperCase()}`;
-    })
-    .join(", ")}`;
+      parts.push(`${quoteIdentifier(orderBy[index]!.column.column)} = ?`);
+      values.push(value);
+    }
+    const pivotValue = cursor.values[pivot];
+    if (pivotValue == null) {
+      throw new Error(
+        `findPage() cursor cannot continue on nullish ordered field "${orderBy[pivot]!.field}".`,
+      );
+    }
+    parts.push(
+      `${quoteIdentifier(orderBy[pivot]!.column.column)} ${orderBy[pivot]!.direction === "asc" ? ">" : "<"} ?`,
+    );
+    values.push(pivotValue);
+    disjuncts.push(`(${parts.join(" AND ")})`);
+  }
+  const tieBreakerParts = orderBy.map(({ column }, index) => {
+    const value = cursor.values[index];
+    if (value == null) {
+      throw new Error(
+        `findPage() cursor cannot continue on nullish ordered field "${orderBy[index]!.field}".`,
+      );
+    }
+    values.push(value);
+    return `${quoteIdentifier(column.column)} = ?`;
+  });
+  values.push(cursor.id);
+  tieBreakerParts.push(`"id" ${tieBreakerDirection(orderBy) === "asc" ? ">" : "<"} ?`);
+  disjuncts.push(`(${tieBreakerParts.join(" AND ")})`);
+  return {
+    sql: ` WHERE (${disjuncts.join(" OR ")})`,
+    values,
+  };
+}
+
+function encodePageCursor<T extends KindDefinitionBag>(
+  definition: KindRuntimeDefinition<T>,
+  orderBy: ResolvedOrderByEntry[],
+  row: StoredRow,
+  value: KindValue<T>,
+) {
+  const values = orderBy.map(({ field }) => {
+    const fieldValue = (value as Record<string, unknown>)[field];
+    if (fieldValue == null) {
+      throw new Error(`findPage() cannot paginate on nullish ordered field "${field}".`);
+    }
+    return fieldValue;
+  });
+  return Buffer.from(
+    JSON.stringify({
+      version: PAGE_CURSOR_VERSION,
+      tag: definition.definition.tag,
+      order: orderBy.map(({ field, direction }) => [field, direction] as const),
+      values,
+      id: row.id,
+    } satisfies PageCursorPayload),
+  ).toString("base64url") as KindPageCursor<T>;
+}
+
+function decodePageCursor(cursor: string): PageCursorPayload {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8"));
+  } catch {
+    throw new Error("findPage() cursor is malformed.");
+  }
+  if (!isRecord(parsed)) {
+    throw new Error("findPage() cursor is malformed.");
+  }
+  const { version, tag, order, values, id } = parsed;
+  if (
+    version !== PAGE_CURSOR_VERSION ||
+    typeof tag !== "string" ||
+    !Array.isArray(order) ||
+    !Array.isArray(values) ||
+    typeof id !== "string"
+  ) {
+    throw new Error("findPage() cursor is malformed.");
+  }
+  for (const entry of order) {
+    if (
+      !Array.isArray(entry) ||
+      entry.length !== 2 ||
+      typeof entry[0] !== "string" ||
+      (entry[1] !== "asc" && entry[1] !== "desc")
+    ) {
+      throw new Error("findPage() cursor is malformed.");
+    }
+  }
+  return {
+    version,
+    tag,
+    order: order as PageCursorPayload["order"],
+    values,
+    id,
+  };
 }
 
 function columnName(field: string) {

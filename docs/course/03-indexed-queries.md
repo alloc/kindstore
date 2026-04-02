@@ -57,6 +57,31 @@ The typed query language supports:
 
 It does not support arbitrary boolean composition or relation traversal.
 
+## Use `findPage()` for forward keyset pagination
+
+```ts
+const firstPage = db.tasks.findPage({
+  where: { status: "doing" },
+  orderBy: { updatedAt: "desc" },
+  limit: 20,
+});
+
+const secondPage = db.tasks.findPage({
+  where: { status: "doing" },
+  orderBy: { updatedAt: "desc" },
+  limit: 20,
+  after: firstPage.next,
+});
+```
+
+`findPage()` is a narrow helper over the same indexed query model:
+
+* it requires explicit `orderBy`
+* it requires a positive `limit`
+* it only paginates forward
+* it adds document ID as an internal tie-breaker for deterministic paging
+* ordered fields should be non-null across page boundaries
+
 ## Use `first()` when you need one row
 
 ```ts

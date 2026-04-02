@@ -64,6 +64,22 @@ export type FindManyOptions<T extends KindDefinitionBag> = {
   limit?: number;
 };
 
+export type KindPageCursor<T extends KindDefinitionBag> = string & {
+  readonly __kindstorePageCursor?: T["tag"];
+};
+
+export type FindPageOptions<T extends KindDefinitionBag> = {
+  where?: KindWhere<T>;
+  orderBy: KindOrderBy<T>;
+  limit: number;
+  after?: KindPageCursor<T>;
+};
+
+export type FindPageResult<T extends KindDefinitionBag> = {
+  items: KindValue<T>[];
+  next?: KindPageCursor<T>;
+};
+
 export type PatchValue<T> = T extends object ? Partial<T> : never;
 
 export type KindMigrationContext = {

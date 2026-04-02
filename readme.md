@@ -40,6 +40,12 @@ const activeSessions = db.sessions.findMany({
   where: { status: "active" },
   orderBy: { updatedAt: "desc" },
 });
+
+const firstPage = db.sessions.findPage({
+  where: { status: "active" },
+  orderBy: { updatedAt: "desc" },
+  limit: 20,
+});
 ```
 
 Next:

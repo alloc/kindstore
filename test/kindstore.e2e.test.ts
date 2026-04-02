@@ -209,6 +209,104 @@ describe("kindstore", () => {
     db.close();
   });
 
+  test("pages through indexed queries with a deterministic cursor", () => {
+    const filename = `file:kindstore-pages-${crypto.randomUUID()}?mode=memory&cache=shared`;
+    const Task = z.object({
+      status: z.enum(["todo", "doing", "done"]),
+      updatedAt: z.number().int(),
+      title: z.string(),
+    });
+    const db = kindstore({
+      connection: { filename },
+      tasks: kind("tsk", Task)
+        .index("status")
+        .index("updatedAt", { type: "integer" })
+        .multi("status_updatedAt", { status: "asc", updatedAt: "desc" }),
+    });
+    for (const [title, updatedAt] of [
+      ["Newest", 30],
+      ["Tie B", 20],
+      ["Tie A", 20],
+      ["Oldest", 10],
+    ] as const) {
+      db.tasks.put(db.tasks.newId(), {
+        status: "doing",
+        updatedAt,
+        title,
+      });
+    }
+
+    const firstPage = db.tasks.findPage({
+      where: { status: "doing" },
+      orderBy: { updatedAt: "desc" },
+      limit: 2,
+    });
+    expect(firstPage.items.map((task) => task.title)).toEqual(["Newest", "Tie A"]);
+    expect(firstPage.next).toEqual(expect.any(String));
+
+    const secondPage = db.tasks.findPage({
+      where: { status: "doing" },
+      orderBy: { updatedAt: "desc" },
+      limit: 2,
+      after: firstPage.next,
+    });
+    expect(secondPage.items.map((task) => task.title)).toEqual(["Tie B", "Oldest"]);
+    expect(secondPage.next).toBeUndefined();
+    db.close();
+  });
+
+  test("rejects invalid findPage usage", () => {
+    const filename = `file:kindstore-find-page-errors-${crypto.randomUUID()}?mode=memory&cache=shared`;
+    const Task = z.object({
+      status: z.enum(["todo", "doing", "done"]),
+      updatedAt: z.number().int(),
+      title: z.string(),
+    });
+    const db = kindstore({
+      connection: { filename },
+      tasks: kind("tsk", Task).index("status").index("updatedAt", { type: "integer" }),
+    });
+    db.tasks.put(db.tasks.newId(), {
+      status: "doing",
+      updatedAt: 1,
+      title: "One",
+    });
+    db.tasks.put(db.tasks.newId(), {
+      status: "doing",
+      updatedAt: 0,
+      title: "Two",
+    });
+    expect(() =>
+      db.tasks.findPage({
+        where: { status: "doing" },
+        orderBy: {},
+        limit: 1,
+      }),
+    ).toThrow('findPage() for kind "tasks" requires an explicit orderBy.');
+    expect(() =>
+      db.tasks.findPage({
+        where: { status: "doing" },
+        orderBy: { updatedAt: "desc" },
+        limit: 0,
+      }),
+    ).toThrow('must be a positive integer when using findPage()');
+    const firstPage = db.tasks.findPage({
+      where: { status: "doing" },
+      orderBy: { updatedAt: "desc" },
+      limit: 1,
+    });
+    expect(firstPage.next).toEqual(expect.any(String));
+    expect(() =>
+      db.tasks.findPage({
+        where: { status: "doing" },
+        orderBy: { updatedAt: "asc" },
+        limit: 1,
+        after: firstPage.next,
+      }),
+    ).toThrow('findPage() cursor does not match the requested orderBy for kind "tasks".');
+    db.close();
+  });
+
   test("runs eager migrations before reads and indexed queries", () => {
     const filename = `file:kindstore-migrate-${crypto.randomUUID()}?mode=memory&cache=shared`;
     const TaskV1 = z.object({

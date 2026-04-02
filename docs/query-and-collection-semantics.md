@@ -31,6 +31,7 @@ Each collection provides:
 * `delete(id)`
 * `first(options?)`
 * `findMany(options?)`
+* `findPage(options)`
 * `iterate(options?)`
 
 ## ID semantics
@@ -67,6 +68,21 @@ If callers need deterministic results, they should supply an explicit order.
 
 It is the convenience API for callers who want the full result set materialized
 in memory.
+
+### `findPage(options)`
+
+`findPage` returns one eager page of matching validated documents plus an
+optional cursor for the next page.
+
+Its durable contract is intentionally narrow:
+
+* callers must provide an explicit `orderBy`
+* callers must provide a positive `limit`
+* pagination is forward-only
+* kindstore adds the document ID as an internal tie-breaker so traversal stays
+  deterministic when ordered field values tie
+* cursors are only valid for the same kind and the same `orderBy`
+* ordered fields used as the paging boundary must be non-null
 
 ### `iterate(options?)`
 
