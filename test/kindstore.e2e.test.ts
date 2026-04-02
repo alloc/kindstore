@@ -97,6 +97,23 @@ describe("kindstore", () => {
       updatedAt: now + 6,
       deviceId: "mobile:ios",
     });
+    const timestampsBefore = db.raw
+      .query(`SELECT "created_at", "updated_at" FROM "sessions" WHERE "id" = ?`)
+      .get(activeId) as { created_at: number; updated_at: number };
+    db.sessions.put(activeId, {
+      userId: "usr_1",
+      status: "active",
+      expiresAt: now + 30_000,
+      updatedAt: now + 7,
+      deviceId: "mobile:ios",
+    });
+    const timestampsAfter = db.raw
+      .query(`SELECT "created_at", "updated_at" FROM "sessions" WHERE "id" = ?`)
+      .get(activeId) as { created_at: number; updated_at: number };
+    expect(timestampsAfter.created_at).toBe(timestampsBefore.created_at);
+    expect(timestampsAfter.updated_at).toBeGreaterThanOrEqual(
+      timestampsBefore.updated_at,
+    );
     expect(db.metadata.get("app")).toBeUndefined();
     expect(
       db.metadata.set("app", {
@@ -171,8 +188,8 @@ describe("kindstore", () => {
     expect(mirrored.sessions.get(activeId)).toEqual({
       userId: "usr_1",
       status: "active",
-      expiresAt: now + 10_000,
-      updatedAt: now + 6,
+      expiresAt: now + 30_000,
+      updatedAt: now + 7,
       deviceId: "mobile:ios",
     });
     expect(mirrored.metadata.get("app")).toEqual({
@@ -263,6 +280,48 @@ describe("kindstore", () => {
         sessions: kind("ses", Session).index("userId").index("status"),
       }),
     ).toThrow("missing the kindstore format version");
+    db.close();
+  });
+
+  test("fails fast when internal kind_versions metadata is malformed", () => {
+    const filename = `file:kindstore-bad-kind-versions-${crypto.randomUUID()}?mode=memory&cache=shared`;
+    const Session = z.object({
+      userId: z.string(),
+    });
+    const db = kindstore({
+      connection: { filename },
+      sessions: kind("ses", Session).index("userId"),
+    });
+    db.raw
+      .query(`UPDATE "__kindstore_internal" SET "payload" = ? WHERE "key" = 'kind_versions'`)
+      .run('"oops"');
+    expect(() =>
+      kindstore({
+        connection: { filename },
+        sessions: kind("ses", Session).index("userId"),
+      }),
+    ).toThrow('Internal metadata key "kind_versions" is malformed');
+    db.close();
+  });
+
+  test("fails fast when internal schema_snapshot metadata is malformed", () => {
+    const filename = `file:kindstore-bad-snapshot-${crypto.randomUUID()}?mode=memory&cache=shared`;
+    const Session = z.object({
+      userId: z.string(),
+    });
+    const db = kindstore({
+      connection: { filename },
+      sessions: kind("ses", Session).index("userId"),
+    });
+    db.raw
+      .query(`UPDATE "__kindstore_internal" SET "payload" = ? WHERE "key" = 'schema_snapshot'`)
+      .run('{"kindstoreVersion":1,"kinds":{"sessions":{"tag":"ses"}}}');
+    expect(() =>
+      kindstore({
+        connection: { filename },
+        sessions: kind("ses", Session).index("userId"),
+      }),
+    ).toThrow('Internal metadata key "schema_snapshot" has an invalid kind entry');
     db.close();
   });
 
@@ -390,6 +449,24 @@ describe("kindstore", () => {
     ).toEqual({ payload: '{"authSessions":1}' });
     renamed.close();
     initial.close();
+  });
+
+  test("rejects invalid schema migration planner declarations early", () => {
+    const filename = `file:kindstore-invalid-planner-${crypto.randomUUID()}?mode=memory&cache=shared`;
+    const Session = z.object({
+      userId: z.string(),
+    });
+    expect(() =>
+      kindstore({
+        connection: { filename },
+        schema: {
+          migrate(m) {
+            m.rename("sessions", "sessions");
+          },
+        },
+        sessions: kind("ses", Session).index("userId"),
+      }),
+    ).toThrow('rename from "sessions" to itself');
   });
 
   test("drops a previous kind when authorized by schema.migrate", () => {

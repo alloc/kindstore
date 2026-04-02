@@ -822,7 +822,13 @@ class InternalMetadataRuntime {
 
   getNumber(key: string) {
     const value = this.get(key);
-    return typeof value === "number" ? value : undefined;
+    if (value == null) {
+      return undefined;
+    }
+    if (typeof value !== "number") {
+      throw new Error(`Internal metadata key "${key}" must be a number.`);
+    }
+    return value;
   }
 
   set(key: string, value: unknown) {
@@ -842,29 +848,23 @@ class InternalMetadataRuntime {
   }
 
   getKindVersion(kind: string) {
-    const versions = this.get(KIND_VERSIONS_KEY);
-    if (!versions || typeof versions !== "object" || Array.isArray(versions)) {
-      return undefined;
-    }
-    const version = (versions as Record<string, unknown>)[kind];
+    const versions = this.getKindVersions();
+    const version = versions?.[kind];
     return typeof version === "number" ? version : undefined;
   }
 
   setKindVersion(kind: string, version: number) {
-    const current = this.get(KIND_VERSIONS_KEY);
-    const next =
-      current && typeof current === "object" && !Array.isArray(current)
-        ? { ...(current as Record<string, unknown>), [kind]: version }
-        : { [kind]: version };
+    const current = this.getKindVersions();
+    const next = current ? { ...current, [kind]: version } : { [kind]: version };
     this.set(KIND_VERSIONS_KEY, next);
   }
 
   deleteKindVersion(kind: string) {
-    const current = this.get(KIND_VERSIONS_KEY);
-    if (!current || typeof current !== "object" || Array.isArray(current)) {
+    const current = this.getKindVersions();
+    if (!current) {
       return;
     }
-    const next = { ...(current as Record<string, unknown>) };
+    const next = { ...current };
     delete next[kind];
     if (Object.keys(next).length) {
       this.set(KIND_VERSIONS_KEY, next);
@@ -889,14 +889,73 @@ class InternalMetadataRuntime {
 
   getSchemaSnapshot() {
     const snapshot = this.get(SCHEMA_SNAPSHOT_KEY);
-    if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) {
+    if (snapshot == null) {
       return undefined;
+    }
+    if (!isRecord(snapshot) ||
+      !Number.isInteger(snapshot.kindstoreVersion) ||
+      !isRecord(snapshot.kinds)) {
+      throw new Error(`Internal metadata key "${SCHEMA_SNAPSHOT_KEY}" is malformed.`);
+    }
+    for (const [kindKey, kind] of Object.entries(snapshot.kinds)) {
+      if (!isRecord(kind) ||
+        typeof kind.tag !== "string" ||
+        typeof kind.table !== "string" ||
+        !Number.isInteger(kind.version) ||
+        !isRecord(kind.columns) ||
+        !isRecord(kind.indexes)) {
+        throw new Error(
+          `Internal metadata key "${SCHEMA_SNAPSHOT_KEY}" has an invalid kind entry for "${kindKey}".`,
+        );
+      }
+      for (const [field, column] of Object.entries(kind.columns)) {
+        if (!isRecord(column) ||
+          column.field !== field ||
+          typeof column.column !== "string" ||
+          typeof column.type !== "string" ||
+          !isSqliteTypeHint(column.type) ||
+          typeof column.single !== "boolean") {
+          throw new Error(
+            `Internal metadata key "${SCHEMA_SNAPSHOT_KEY}" has an invalid column entry for "${kindKey}.${field}".`,
+          );
+        }
+      }
+      for (const [indexName, index] of Object.entries(kind.indexes)) {
+        if (!isRecord(index) ||
+          index.sqliteName !== indexName ||
+          !Array.isArray(index.columns) ||
+          index.columns.some((column) => typeof column !== "string")) {
+          throw new Error(
+            `Internal metadata key "${SCHEMA_SNAPSHOT_KEY}" has an invalid index entry for "${kindKey}.${indexName}".`,
+          );
+        }
+      }
     }
     return snapshot as StoreSchemaSnapshot;
   }
 
   setSchemaSnapshot(snapshot: StoreSchemaSnapshot) {
     this.set(SCHEMA_SNAPSHOT_KEY, snapshot);
+  }
+
+  private getKindVersions() {
+    const versions = this.get(KIND_VERSIONS_KEY);
+    if (versions == null) {
+      return undefined;
+    }
+    if (!isRecord(versions)) {
+      throw new Error(`Internal metadata key "${KIND_VERSIONS_KEY}" is malformed.`);
+    }
+    for (const [kind, version] of Object.entries(
+      versions as Record<string, unknown>,
+    )) {
+      if (typeof version !== "number" || !Number.isInteger(version) || version < 1) {
+        throw new Error(
+          `Internal metadata key "${KIND_VERSIONS_KEY}" has an invalid version for "${kind}".`,
+        );
+      }
+    }
+    return versions as Record<string, number>;
   }
 }
 
@@ -921,6 +980,14 @@ class SchemaMigrationPlannerRuntime {
   }
 
   rename(previousKindKey: string, nextKindKey: string) {
+    if (!previousKindKey || !nextKindKey) {
+      throw new Error("Schema migration rename keys must be non-empty.");
+    }
+    if (previousKindKey === nextKindKey) {
+      throw new Error(
+        `Schema migration rename from "${previousKindKey}" to itself is not allowed.`,
+      );
+    }
     if (this.plan.drops.has(previousKindKey) ||
       this.plan.renames.has(previousKindKey)) {
       throw new Error(
@@ -939,6 +1006,9 @@ class SchemaMigrationPlannerRuntime {
   }
 
   drop(previousKindKey: string) {
+    if (!previousKindKey) {
+      throw new Error("Schema migration drop key must be non-empty.");
+    }
     if (this.plan.renames.has(previousKindKey) ||
       this.plan.drops.has(previousKindKey)) {
       throw new Error(
@@ -950,6 +1020,9 @@ class SchemaMigrationPlannerRuntime {
   }
 
   retag(kindKey: string, previousTag: string) {
+    if (!kindKey || !previousTag) {
+      throw new Error("Schema migration retag arguments must be non-empty.");
+    }
     if (this.plan.retags.has(kindKey)) {
       throw new Error(
         `Schema migration already defines a retag for kind "${kindKey}".`,
@@ -1251,6 +1324,17 @@ function snapshotIndexes<T extends KindDefinitionBag>(
 function sameColumns(left: readonly string[], right: readonly string[]) {
   return left.length === right.length &&
     left.every((value, index) => value === right[index]);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function isSqliteTypeHint(value: string): value is SqliteTypeHint {
+  return value === "text" ||
+    value === "integer" ||
+    value === "real" ||
+    value === "numeric";
 }
 
 function quoteIdentifier(value: string) {
