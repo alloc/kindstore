@@ -19,8 +19,13 @@ import type {
   TaggedId,
 } from "./types";
 
-const INTERNAL_KIND_VERSIONS = "__kindstore_kind_versions";
-const INTERNAL_METADATA = "__kindstore_metadata";
+const KINDSTORE_FORMAT_VERSION = 1;
+const INTERNAL_TABLE = "__kindstore_internal";
+const APP_METADATA_TABLE = "__kindstore_app_metadata";
+const LEGACY_KIND_VERSIONS_TABLE = "__kindstore_kind_versions";
+const LEGACY_APP_METADATA_TABLE = "__kindstore_metadata";
+const STORE_FORMAT_VERSION_KEY = "store_format_version";
+const KIND_VERSIONS_KEY = "kind_versions";
 const RESERVED_STORE_KEYS = new Set([
   "batch",
   "close",
@@ -138,6 +143,7 @@ class KindstoreRuntime<
   readonly database: Database;
   readonly kinds: Map<string, KindRuntimeDefinition<any>>;
   readonly publicStore: Record<string, unknown>;
+  readonly internal: InternalMetadataRuntime;
   readonly metadata: MetadataRuntime<TMetadata>;
 
   constructor(
@@ -148,6 +154,8 @@ class KindstoreRuntime<
     this.database = database;
     this.kinds = kinds;
     this.publicStore = this as Record<string, unknown>;
+    this.ensureInternalTable();
+    this.internal = new InternalMetadataRuntime(database);
     this.bootstrap();
     this.metadata = new MetadataRuntime(database, metadataDefinitions);
     this.publicStore.raw = database;
@@ -170,14 +178,9 @@ class KindstoreRuntime<
   }
 
   private bootstrap() {
+    this.ensureStoreFormatVersion();
     this.database.exec(
-      `CREATE TABLE IF NOT EXISTS ${quoteIdentifier(INTERNAL_KIND_VERSIONS)} (
-        "name" TEXT PRIMARY KEY NOT NULL,
-        "version" INTEGER NOT NULL
-      ) STRICT`,
-    );
-    this.database.exec(
-      `CREATE TABLE IF NOT EXISTS ${quoteIdentifier(INTERNAL_METADATA)} (
+      `CREATE TABLE IF NOT EXISTS ${quoteIdentifier(APP_METADATA_TABLE)} (
         "key" TEXT PRIMARY KEY NOT NULL,
         "payload" TEXT NOT NULL,
         "created_at" INTEGER NOT NULL,
@@ -190,6 +193,65 @@ class KindstoreRuntime<
       this.ensureIndexes(definition);
       this.migrateKind(definition);
     }
+  }
+
+  private ensureInternalTable() {
+    this.database.exec(
+      `CREATE TABLE IF NOT EXISTS ${quoteIdentifier(INTERNAL_TABLE)} (
+        "key" TEXT PRIMARY KEY NOT NULL,
+        "payload" TEXT NOT NULL,
+        "updated_at" INTEGER NOT NULL
+      ) STRICT`,
+    );
+  }
+
+  private ensureStoreFormatVersion() {
+    const version = this.internal.getNumber(STORE_FORMAT_VERSION_KEY);
+    if (version == null) {
+      if (this.hasExistingStoreArtifacts()) {
+        throw new Error(
+          "Store is missing the kindstore format version and cannot be opened safely.",
+        );
+      }
+      this.internal.set(STORE_FORMAT_VERSION_KEY, KINDSTORE_FORMAT_VERSION);
+      return;
+    }
+    if (!Number.isInteger(version) || version < 1) {
+      throw new Error(`Invalid kindstore format version "${version}".`);
+    }
+    if (version > KINDSTORE_FORMAT_VERSION) {
+      throw new Error(
+        `Store format version ${version} is newer than supported version ${KINDSTORE_FORMAT_VERSION}.`,
+      );
+    }
+    if (version < KINDSTORE_FORMAT_VERSION) {
+      throw new Error(
+        `Store format version ${version} is older than supported version ${KINDSTORE_FORMAT_VERSION}.`,
+      );
+    }
+  }
+
+  private hasExistingStoreArtifacts() {
+    if (
+      this.hasTable(LEGACY_KIND_VERSIONS_TABLE) ||
+      this.hasTable(LEGACY_APP_METADATA_TABLE)
+    ) {
+      return true;
+    }
+    for (const definition of this.kinds.values()) {
+      if (this.hasTable(definition.table)) {
+        return true;
+      }
+    }
+    return this.internal.keys().length > 0;
+  }
+
+  private hasTable(name: string) {
+    return !!this.database
+      .query(
+        `SELECT 1 AS "exists" FROM "sqlite_master" WHERE "type" = 'table' AND "name" = ?`,
+      )
+      .get(name);
   }
 
   private ensureKindTable<T extends KindDefinitionBag>(
@@ -246,38 +308,27 @@ class KindstoreRuntime<
   private migrateKind<T extends KindDefinitionBag>(
     definition: KindRuntimeDefinition<T>,
   ) {
-    const versionRow = this.database
-      .query(
-        `SELECT "version" FROM ${quoteIdentifier(INTERNAL_KIND_VERSIONS)} WHERE "name" = ?`,
-      )
-      .get(definition.key) as { version: number } | undefined;
-    if (!versionRow) {
-      this.database
-        .query(
-          `INSERT INTO ${quoteIdentifier(INTERNAL_KIND_VERSIONS)} ("name", "version") VALUES (?, ?)`,
-        )
-        .run(definition.key, definition.definition.version);
+    const version = this.internal.getKindVersion(definition.key);
+    if (version == null) {
+      this.internal.setKindVersion(definition.key, definition.definition.version);
       return;
     }
-    if (versionRow.version > definition.definition.version) {
+    if (version > definition.definition.version) {
       throw new Error(
-        `Kind "${definition.key}" is at version ${versionRow.version}, but the registry declares version ${definition.definition.version}.`,
+        `Kind "${definition.key}" is at version ${version}, but the registry declares version ${definition.definition.version}.`,
       );
     }
-    if (versionRow.version === definition.definition.version) {
+    if (version === definition.definition.version) {
       return;
     }
     const migrations = definition.definition.migrations;
     if (!migrations) {
       throw new Error(
-        `Kind "${definition.key}" requires migrations from version ${versionRow.version} to ${definition.definition.version}, but none were declared.`,
+        `Kind "${definition.key}" requires migrations from version ${version} to ${definition.definition.version}, but none were declared.`,
       );
     }
     const updateRow = this.database.query(
       `UPDATE ${quoteIdentifier(definition.table)} SET "payload" = ?, "updated_at" = ? WHERE "id" = ?`,
-    );
-    const setVersion = this.database.query(
-      `UPDATE ${quoteIdentifier(INTERNAL_KIND_VERSIONS)} SET "version" = ? WHERE "name" = ?`,
     );
     this.database.transaction(() => {
       const now = Date.now();
@@ -287,14 +338,14 @@ class KindstoreRuntime<
       ).iterate() as IterableIterator<StoredRow>) {
         let value = parsePayload(row.payload);
         for (
-          let version = versionRow.version;
-          version < definition.definition.version;
-          version++
+          let currentVersion = version;
+          currentVersion < definition.definition.version;
+          currentVersion++
         ) {
-          const step = migrations[version];
+          const step = migrations[currentVersion];
           if (!step) {
             throw new Error(
-              `Kind "${definition.key}" is missing migration step ${version} -> ${version + 1}.`,
+              `Kind "${definition.key}" is missing migration step ${currentVersion} -> ${currentVersion + 1}.`,
             );
           }
           value = step(
@@ -308,7 +359,7 @@ class KindstoreRuntime<
           row.id,
         );
       }
-      setVersion.run(definition.definition.version, definition.key);
+      this.internal.setKindVersion(definition.key, definition.definition.version);
     })();
   }
 }
@@ -447,14 +498,14 @@ class MetadataRuntime<T extends MetadataDefinitionMap>
     this.database = database;
     this.definitions = definitions;
     this.getStatement = database.query(
-      `SELECT "payload" FROM ${quoteIdentifier(INTERNAL_METADATA)} WHERE "key" = ?`,
+      `SELECT "payload" FROM ${quoteIdentifier(APP_METADATA_TABLE)} WHERE "key" = ?`,
     );
     this.setStatement = database.query(
-      `INSERT INTO ${quoteIdentifier(INTERNAL_METADATA)} ("key", "payload", "created_at", "updated_at") VALUES (?, ?, ?, ?)
+      `INSERT INTO ${quoteIdentifier(APP_METADATA_TABLE)} ("key", "payload", "created_at", "updated_at") VALUES (?, ?, ?, ?)
        ON CONFLICT("key") DO UPDATE SET "payload" = excluded."payload", "updated_at" = excluded."updated_at"`,
     );
     this.deleteStatement = database.query(
-      `DELETE FROM ${quoteIdentifier(INTERNAL_METADATA)} WHERE "key" = ?`,
+      `DELETE FROM ${quoteIdentifier(APP_METADATA_TABLE)} WHERE "key" = ?`,
     );
   }
 
@@ -490,6 +541,63 @@ class MetadataRuntime<T extends MetadataDefinitionMap>
     updater: (current: MetadataValue<T, K> | undefined) => MetadataValue<T, K>,
   ) {
     return this.database.transaction(() => this.set(key, updater(this.get(key))))();
+  }
+}
+
+class InternalMetadataRuntime {
+  readonly database: Database;
+  readonly getStatement;
+  readonly setStatement;
+
+  constructor(database: Database) {
+    this.database = database;
+    this.getStatement = database.query(
+      `SELECT "payload" FROM ${quoteIdentifier(INTERNAL_TABLE)} WHERE "key" = ?`,
+    );
+    this.setStatement = database.query(
+      `INSERT INTO ${quoteIdentifier(INTERNAL_TABLE)} ("key", "payload", "updated_at") VALUES (?, ?, ?)
+       ON CONFLICT("key") DO UPDATE SET "payload" = excluded."payload", "updated_at" = excluded."updated_at"`,
+    );
+  }
+
+  get(key: string) {
+    const row = this.getStatement.get(key) as { payload: string } | undefined;
+    return row ? parsePayload(row.payload) : undefined;
+  }
+
+  getNumber(key: string) {
+    const value = this.get(key);
+    return typeof value === "number" ? value : undefined;
+  }
+
+  set(key: string, value: unknown) {
+    this.setStatement.run(key, JSON.stringify(value), Date.now());
+  }
+
+  keys() {
+    return (
+      this.database.query(
+        `SELECT "key" FROM ${quoteIdentifier(INTERNAL_TABLE)} ORDER BY "key" ASC`,
+      ).all() as { key: string }[]
+    ).map((row) => row.key);
+  }
+
+  getKindVersion(kind: string) {
+    const versions = this.get(KIND_VERSIONS_KEY);
+    if (!versions || typeof versions !== "object" || Array.isArray(versions)) {
+      return undefined;
+    }
+    const version = (versions as Record<string, unknown>)[kind];
+    return typeof version === "number" ? version : undefined;
+  }
+
+  setKindVersion(kind: string, version: number) {
+    const current = this.get(KIND_VERSIONS_KEY);
+    const next =
+      current && typeof current === "object" && !Array.isArray(current)
+        ? { ...(current as Record<string, unknown>), [kind]: version }
+        : { [kind]: version };
+    this.set(KIND_VERSIONS_KEY, next);
   }
 }
 

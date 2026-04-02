@@ -128,6 +128,27 @@ describe("kindstore", () => {
         .query(`SELECT count(*) AS count FROM "sessions" WHERE "user_id" = ?`)
         .get("usr_1"),
     ).toEqual({ count: 1 });
+    expect(
+      db.raw
+        .query(`SELECT "name" FROM "sqlite_master" WHERE "type" = 'table' ORDER BY "name" ASC`)
+        .all(),
+    ).toEqual(
+      expect.arrayContaining([
+        { name: "__kindstore_app_metadata" },
+        { name: "__kindstore_internal" },
+        { name: "sessions" },
+      ]),
+    );
+    expect(
+      db.raw
+        .query(`SELECT "payload" FROM "__kindstore_internal" WHERE "key" = 'store_format_version'`)
+        .get(),
+    ).toEqual({ payload: "1" });
+    expect(
+      db.raw
+        .query(`SELECT "payload" FROM "__kindstore_internal" WHERE "key" = 'kind_versions'`)
+        .get(),
+    ).toEqual({ payload: '{"sessions":1}' });
 
     const mirrored = kindstore({
       connection: { filename },
@@ -151,6 +172,11 @@ describe("kindstore", () => {
       theme: "light",
       lastOpenedAt: now + 2,
     });
+    expect(
+      mirrored.raw
+        .query(`SELECT "payload" FROM "__kindstore_internal" WHERE "key" = 'store_format_version'`)
+        .get(),
+    ).toEqual({ payload: "1" });
     mirrored.close();
     db.close();
   });
@@ -195,7 +221,34 @@ describe("kindstore", () => {
         orderBy: { updatedAt: "desc" },
       }),
     ).toEqual(task);
+    expect(
+      migrated.raw
+        .query(`SELECT "payload" FROM "__kindstore_internal" WHERE "key" = 'kind_versions'`)
+        .get(),
+    ).toEqual({ payload: '{"tasks":2}' });
     migrated.close();
     initial.close();
+  });
+
+  test("fails fast when an initialized store is missing its format version", () => {
+    const filename = `file:kindstore-format-${crypto.randomUUID()}?mode=memory&cache=shared`;
+    const Session = z.object({
+      userId: z.string(),
+      status: z.enum(["active", "revoked", "expired"]),
+    });
+    const db = kindstore({
+      connection: { filename },
+      sessions: kind("ses", Session).index("userId").index("status"),
+    });
+    db.raw
+      .query(`DELETE FROM "__kindstore_internal" WHERE "key" = 'store_format_version'`)
+      .run();
+    expect(() =>
+      kindstore({
+        connection: { filename },
+        sessions: kind("ses", Session).index("userId").index("status"),
+      }),
+    ).toThrow("missing the kindstore format version");
+    db.close();
   });
 });
