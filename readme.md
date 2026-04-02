@@ -1,0 +1,5 @@
+# kindstore
+
+```
+pnpm add kindstore
+```
