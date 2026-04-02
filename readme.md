@@ -14,35 +14,40 @@ bun add kindstore zod
 import { z } from "zod";
 import { kind, kindstore } from "kindstore";
 
-const Session = z.object({
-  userId: z.string(),
-  status: z.enum(["active", "revoked"]),
+const Post = z.object({
+  authorId: z.string(),
+  slug: z.string(),
+  title: z.string(),
+  status: z.enum(["draft", "published"]),
   updatedAt: z.number().int(),
 });
 
 const db = kindstore({
   connection: { filename: ":memory:" },
-  sessions: kind("ses", Session)
+  posts: kind("pst", Post)
     .updatedAt("updatedAt")
-    .index("userId")
+    .index("authorId")
+    .index("slug")
     .index("status")
     .index("updatedAt", { type: "integer" }),
 });
 
-const id = db.sessions.newId();
+const id = db.posts.newId();
 
-db.sessions.put(id, {
-  userId: "usr_1",
-  status: "active",
+db.posts.put(id, {
+  authorId: "usr_1",
+  slug: "hello-kindstore",
+  title: "Hello, kindstore",
+  status: "published",
 });
 
-const activeSessions = db.sessions.findMany({
-  where: { status: "active" },
+const publishedPosts = db.posts.findMany({
+  where: { status: "published" },
   orderBy: { updatedAt: "desc" },
 });
 
-const firstPage = db.sessions.findPage({
-  where: { status: "active" },
+const firstPage = db.posts.findPage({
+  where: { status: "published" },
   orderBy: { updatedAt: "desc" },
   limit: 20,
 });

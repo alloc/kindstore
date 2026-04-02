@@ -1,19 +1,36 @@
 {
   "name": "kindstore",
   "version": "0.0.0",
+  "description": "A lightweight, typed document store on SQLite with Zod schemas, indexed queries, and explicit migrations.",
   "license": "MIT",
   "author": "Alec Larson",
+  "homepage": "https://github.com/alloc/kindstore#readme",
+  "bugs": {
+    "url": "https://github.com/alloc/kindstore/issues"
+  },
   "repository": {
     "type": "git",
-    "url": "https://github.com/aleclarson/kindstore.git"
+    "url": "git+https://github.com/alloc/kindstore.git"
   },
+  "keywords": [
+    "bun",
+    "sqlite",
+    "document-store",
+    "zod",
+    "migrations",
+    "typesafe"
+  ],
   "files": [
     "dist"
   ],
   "type": "module",
   "exports": {
-    "types": "./dist/index.d.ts",
-    "default": "./dist/index.js"
+    "types": "./dist/index.d.mts",
+    "import": "./dist/index.mjs"
+  },
+  "sideEffects": false,
+  "engines": {
+    "bun": ">=1.3.11"
   },
   "scripts": {
     "dev": "tsdown --sourcemap --watch",
