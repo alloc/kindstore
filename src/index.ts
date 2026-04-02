@@ -18,6 +18,8 @@ export type {
   MetadataDefinitionMap,
   MetadataValue,
   PatchValue,
+  SchemaDefinition,
+  SchemaMigrationPlanner,
   SqliteTypeHint,
   TaggedId,
   WhereOperand,

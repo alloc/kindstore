@@ -6,6 +6,7 @@ import type {
   ConnectionConfig,
   KindRegistry,
   MetadataDefinitionMap,
+  SchemaDefinition,
 } from "./types";
 import type {
   PublicKindCollection,
@@ -16,10 +17,11 @@ import type {
 type AnyStoreInput = {
   connection: ConnectionConfig;
   metadata?: MetadataDefinitionMap;
+  schema?: SchemaDefinition;
 } & Record<string, unknown>;
 
 type InferKinds<TInput extends AnyStoreInput> = {
-  [K in keyof TInput as K extends "connection" | "metadata"
+  [K in keyof TInput as K extends "connection" | "metadata" | "schema"
     ? never
     : TInput[K] extends KindDefinition<any>
       ? K
@@ -43,11 +45,12 @@ export type Kindstore<
 > = PublicKindstore<TKinds, TMetadata>;
 
 export function kindstore<const TInput extends AnyStoreInput>(input: TInput) {
-  const { connection, metadata, ...rest } = input;
+  const { connection, metadata, schema, ...rest } = input;
   return createStore(
     connection,
     rest as unknown as InferKinds<TInput>,
     (metadata ?? {}) as InferMetadata<TInput>,
+    schema,
   ) as Kindstore<InferKinds<TInput>, InferMetadata<TInput>>;
 }
 

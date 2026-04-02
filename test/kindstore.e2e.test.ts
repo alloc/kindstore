@@ -323,4 +323,135 @@ describe("kindstore", () => {
     narrowed.close();
     initial.close();
   });
+
+  test("requires an explicit schema migration for a missing previous kind", () => {
+    const filename = `file:kindstore-missing-kind-${crypto.randomUUID()}?mode=memory&cache=shared`;
+    const Session = z.object({
+      userId: z.string(),
+    });
+    const initial = kindstore({
+      connection: { filename },
+      sessions: kind("ses", Session).index("userId"),
+    });
+    expect(() =>
+      kindstore({
+        connection: { filename },
+        authSessions: kind("ses", Session).index("userId"),
+      }),
+    ).toThrow('Previous kind "sessions" is missing');
+    initial.close();
+  });
+
+  test("renames a previous kind when authorized by schema.migrate", () => {
+    const filename = `file:kindstore-rename-${crypto.randomUUID()}?mode=memory&cache=shared`;
+    const Session = z.object({
+      userId: z.string(),
+    });
+    const initial = kindstore({
+      connection: { filename },
+      sessions: kind("ses", Session).index("userId"),
+    });
+    const sessionId = initial.sessions.newId();
+    initial.sessions.put(sessionId, {
+      userId: "usr_1",
+    });
+
+    const renamed = kindstore({
+      connection: { filename },
+      schema: {
+        migrate(m) {
+          m.rename("sessions", "authSessions");
+        },
+      },
+      authSessions: kind("ses", Session).index("userId"),
+    });
+    expect(renamed.authSessions.get(sessionId as never)).toEqual({
+      userId: "usr_1",
+    });
+    expect(
+      renamed.raw
+        .query(`SELECT "name" FROM "sqlite_master" WHERE "type" = 'table' ORDER BY "name" ASC`)
+        .all(),
+    ).toEqual(
+      expect.arrayContaining([
+        { name: "auth_sessions" },
+      ]),
+    );
+    expect(
+      renamed.raw
+        .query(`SELECT "payload" FROM "__kindstore_internal" WHERE "key" = 'kind_versions'`)
+        .get(),
+    ).toEqual({ payload: '{"authSessions":1}' });
+    renamed.close();
+    initial.close();
+  });
+
+  test("drops a previous kind when authorized by schema.migrate", () => {
+    const filename = `file:kindstore-drop-${crypto.randomUUID()}?mode=memory&cache=shared`;
+    const Session = z.object({
+      userId: z.string(),
+    });
+    const initial = kindstore({
+      connection: { filename },
+      sessions: kind("ses", Session).index("userId"),
+    });
+    initial.sessions.put(initial.sessions.newId(), {
+      userId: "usr_1",
+    });
+
+    const dropped = kindstore({
+      connection: { filename },
+      schema: {
+        migrate(m) {
+          m.drop("sessions");
+        },
+      },
+    });
+    expect(
+      dropped.raw
+        .query(`SELECT "name" FROM "sqlite_master" WHERE "type" = 'table' AND "name" = 'sessions'`)
+        .all(),
+    ).toEqual([]);
+    expect(
+      dropped.raw
+        .query(`SELECT "payload" FROM "__kindstore_internal" WHERE "key" = 'kind_versions'`)
+        .all(),
+    ).toEqual([]);
+    dropped.close();
+    initial.close();
+  });
+
+  test("retags a kind when authorized by schema.migrate", () => {
+    const filename = `file:kindstore-retag-${crypto.randomUUID()}?mode=memory&cache=shared`;
+    const User = z.object({
+      email: z.string(),
+    });
+    const initial = kindstore({
+      connection: { filename },
+      users: kind("usr", User),
+    });
+    const userId = initial.users.newId();
+    initial.users.put(userId, {
+      email: "jane@example.com",
+    });
+
+    const retagged = kindstore({
+      connection: { filename },
+      schema: {
+        migrate(m) {
+          m.retag("users", "usr");
+        },
+      },
+      users: kind("per", User),
+    });
+    const retaggedId = userId.replace("usr_", "per_");
+    expect(retagged.users.get(retaggedId as never)).toEqual({
+      email: "jane@example.com",
+    });
+    expect(
+      retagged.raw.query(`SELECT "id" FROM "users"`).all(),
+    ).toEqual([{ id: retaggedId }]);
+    retagged.close();
+    initial.close();
+  });
 });

@@ -15,6 +15,7 @@ import type {
   MetadataDefinitionMap,
   MetadataValue,
   PatchValue,
+  SchemaDefinition,
   SqliteTypeHint,
   TaggedId,
 } from "./types";
@@ -89,6 +90,12 @@ type StoreSchemaSnapshot = {
   kinds: Record<string, SnapshotKind>;
 };
 
+type SchemaPlan = {
+  drops: Set<string>;
+  renames: Map<string, string>;
+  retags: Map<string, string>;
+};
+
 type CompiledQuery = {
   sql: string;
   values: any[];
@@ -153,12 +160,14 @@ export function createStore<
   connection: ConnectionConfig,
   kinds: TKinds,
   metadataDefinitions: TMetadata,
+  schemaDefinition?: SchemaDefinition,
 ) {
   const database = new Database(connection.filename, connection.options);
   const runtime = new KindstoreRuntime<TKinds, TMetadata>(
     database,
     normalizeKinds(kinds),
     metadataDefinitions,
+    normalizeSchemaPlan(schemaDefinition),
   );
   return runtime.publicStore as PublicKindstore<TKinds, TMetadata>;
 }
@@ -172,14 +181,17 @@ class KindstoreRuntime<
   readonly publicStore: Record<string, unknown>;
   readonly internal: InternalMetadataRuntime;
   readonly metadata: MetadataRuntime<TMetadata>;
+  readonly schemaPlan: SchemaPlan;
 
   constructor(
     database: Database,
     kinds: Map<string, KindRuntimeDefinition<any>>,
     metadataDefinitions: TMetadata,
+    schemaPlan: SchemaPlan,
   ) {
     this.database = database;
     this.kinds = kinds;
+    this.schemaPlan = schemaPlan;
     this.publicStore = this as Record<string, unknown>;
     this.ensureInternalTable();
     this.internal = new InternalMetadataRuntime(database);
@@ -214,7 +226,9 @@ class KindstoreRuntime<
         "updated_at" INTEGER NOT NULL
       ) STRICT`,
     );
-    const previousSnapshot = this.internal.getSchemaSnapshot();
+    const previousSnapshot = this.applySchemaMigrations(
+      this.internal.getSchemaSnapshot(),
+    );
     for (const definition of this.kinds.values()) {
       this.ensureKindTable(definition);
       this.ensureGeneratedColumns(definition);
@@ -285,6 +299,157 @@ class KindstoreRuntime<
         `SELECT 1 AS "exists" FROM "sqlite_master" WHERE "type" = 'table' AND "name" = ?`,
       )
       .get(name);
+  }
+
+  private applySchemaMigrations(previousSnapshot: StoreSchemaSnapshot | undefined) {
+    if (!previousSnapshot) {
+      return previousSnapshot;
+    }
+    const resolvedKinds: Record<string, SnapshotKind> = {};
+    const consumedPrevious = new Set<string>();
+    const usedRetags = new Set<string>();
+    for (const [key, previous] of Object.entries(previousSnapshot.kinds)) {
+      if (this.kinds.has(key)) {
+        resolvedKinds[key] = previous;
+        consumedPrevious.add(key);
+      }
+    }
+    for (const [previousKey, nextKey] of this.schemaPlan.renames) {
+      const previous = previousSnapshot.kinds[previousKey];
+      if (!previous) {
+        throw new Error(
+          `Schema migration rename references unknown previous kind "${previousKey}".`,
+        );
+      }
+      const next = this.kinds.get(nextKey);
+      if (!next) {
+        throw new Error(
+          `Schema migration rename target "${nextKey}" is not in the current registry.`,
+        );
+      }
+      if (resolvedKinds[nextKey]) {
+        throw new Error(
+          `Schema migration rename target "${nextKey}" is already matched to a previous kind.`,
+        );
+      }
+      this.renameKind(previousKey, previous, nextKey, next);
+      resolvedKinds[nextKey] = {
+        ...previous,
+        table: next.table,
+      };
+      consumedPrevious.add(previousKey);
+    }
+    for (const [previousKey, previous] of Object.entries(previousSnapshot.kinds)) {
+      if (consumedPrevious.has(previousKey)) {
+        continue;
+      }
+      if (this.schemaPlan.drops.has(previousKey)) {
+        this.dropKind(previousKey, previous);
+        consumedPrevious.add(previousKey);
+        continue;
+      }
+      if (!this.kinds.has(previousKey)) {
+        throw new Error(
+          `Previous kind "${previousKey}" is missing from the current registry and requires schema.migrate(...).`,
+        );
+      }
+    }
+    for (const [key, current] of this.kinds) {
+      const previous = resolvedKinds[key];
+      if (!previous) {
+        continue;
+      }
+      if (this.retagKindIfNeeded(key, previous, current)) {
+        usedRetags.add(key);
+      }
+    }
+    for (const key of this.schemaPlan.retags.keys()) {
+      if (!usedRetags.has(key)) {
+        throw new Error(
+          `Schema migration retag for kind "${key}" did not match a changed current kind.`,
+        );
+      }
+    }
+    return {
+      kindstoreVersion: previousSnapshot.kindstoreVersion,
+      kinds: resolvedKinds,
+    };
+  }
+
+  private renameKind<T extends KindDefinitionBag>(
+    previousKey: string,
+    previous: SnapshotKind,
+    nextKey: string,
+    next: KindRuntimeDefinition<T>,
+  ) {
+    if (this.kinds.has(previousKey)) {
+      throw new Error(
+        `Schema migration rename source "${previousKey}" still exists in the current registry.`,
+      );
+    }
+    if (!this.hasTable(previous.table)) {
+      throw new Error(
+        `Schema migration rename source table "${previous.table}" does not exist.`,
+      );
+    }
+    if (previous.table !== next.table) {
+      if (this.hasTable(next.table)) {
+        throw new Error(
+          `Schema migration rename target table "${next.table}" already exists.`,
+        );
+      }
+      this.database.exec(
+        `ALTER TABLE ${quoteIdentifier(previous.table)} RENAME TO ${quoteIdentifier(next.table)}`,
+      );
+    }
+    this.internal.moveKindVersion(previousKey, nextKey);
+  }
+
+  private dropKind(previousKey: string, previous: SnapshotKind) {
+    if (this.kinds.has(previousKey)) {
+      throw new Error(
+        `Schema migration drop source "${previousKey}" still exists in the current registry.`,
+      );
+    }
+    if (this.hasTable(previous.table)) {
+      this.database.exec(
+        `DROP TABLE IF EXISTS ${quoteIdentifier(previous.table)}`,
+      );
+    }
+    this.internal.deleteKindVersion(previousKey);
+  }
+
+  private retagKindIfNeeded<T extends KindDefinitionBag>(
+    key: string,
+    previous: SnapshotKind,
+    current: KindRuntimeDefinition<T>,
+  ) {
+    if (previous.tag === current.definition.tag) {
+      return false;
+    }
+    const expectedPreviousTag = this.schemaPlan.retags.get(key);
+    if (expectedPreviousTag !== previous.tag) {
+      throw new Error(
+        `Kind "${key}" changed tag from "${previous.tag}" to "${current.definition.tag}" and requires schema.migrate(...).`,
+      );
+    }
+    const updateIds = this.database.query(
+      `UPDATE ${quoteIdentifier(current.table)} SET "id" = ? WHERE "id" = ?`,
+    );
+    for (const row of this.database.query(
+      `SELECT "id" FROM ${quoteIdentifier(current.table)} ORDER BY "id" ASC`,
+    ).iterate() as IterableIterator<{ id: string }>) {
+      if (!row.id.startsWith(`${previous.tag}_`)) {
+        throw new Error(
+          `Kind "${key}" cannot retag row "${row.id}" because it does not use the previous tag prefix "${previous.tag}_".`,
+        );
+      }
+      updateIds.run(
+        `${current.definition.tag}_${row.id.slice(previous.tag.length + 1)}`,
+        row.id,
+      );
+    }
+    return true;
   }
 
   private ensureKindTable<T extends KindDefinitionBag>(
@@ -623,12 +788,16 @@ class MetadataRuntime<T extends MetadataDefinitionMap>
 class InternalMetadataRuntime {
   readonly database: Database;
   readonly getStatement;
+  readonly deleteStatement;
   readonly setStatement;
 
   constructor(database: Database) {
     this.database = database;
     this.getStatement = database.query(
       `SELECT "payload" FROM ${quoteIdentifier(INTERNAL_TABLE)} WHERE "key" = ?`,
+    );
+    this.deleteStatement = database.query(
+      `DELETE FROM ${quoteIdentifier(INTERNAL_TABLE)} WHERE "key" = ?`,
     );
     this.setStatement = database.query(
       `INSERT INTO ${quoteIdentifier(INTERNAL_TABLE)} ("key", "payload", "updated_at") VALUES (?, ?, ?)
@@ -648,6 +817,10 @@ class InternalMetadataRuntime {
 
   set(key: string, value: unknown) {
     this.setStatement.run(key, JSON.stringify(value), Date.now());
+  }
+
+  delete(key: string) {
+    this.deleteStatement.run(key);
   }
 
   keys() {
@@ -676,6 +849,34 @@ class InternalMetadataRuntime {
     this.set(KIND_VERSIONS_KEY, next);
   }
 
+  deleteKindVersion(kind: string) {
+    const current = this.get(KIND_VERSIONS_KEY);
+    if (!current || typeof current !== "object" || Array.isArray(current)) {
+      return;
+    }
+    const next = { ...(current as Record<string, unknown>) };
+    delete next[kind];
+    if (Object.keys(next).length) {
+      this.set(KIND_VERSIONS_KEY, next);
+      return;
+    }
+    this.delete(KIND_VERSIONS_KEY);
+  }
+
+  moveKindVersion(previousKind: string, nextKind: string) {
+    const version = this.getKindVersion(previousKind);
+    if (version == null) {
+      return;
+    }
+    if (this.getKindVersion(nextKind) != null) {
+      throw new Error(
+        `Schema migration cannot move kind version from "${previousKind}" to "${nextKind}" because the target already has a version entry.`,
+      );
+    }
+    this.setKindVersion(nextKind, version);
+    this.deleteKindVersion(previousKind);
+  }
+
   getSchemaSnapshot() {
     const snapshot = this.get(SCHEMA_SNAPSHOT_KEY);
     if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) {
@@ -686,6 +887,66 @@ class InternalMetadataRuntime {
 
   setSchemaSnapshot(snapshot: StoreSchemaSnapshot) {
     this.set(SCHEMA_SNAPSHOT_KEY, snapshot);
+  }
+}
+
+function normalizeSchemaPlan(schemaDefinition: SchemaDefinition | undefined): SchemaPlan {
+  const plan: SchemaPlan = {
+    drops: new Set(),
+    renames: new Map(),
+    retags: new Map(),
+  };
+  if (!schemaDefinition) {
+    return plan;
+  }
+  schemaDefinition.migrate(new SchemaMigrationPlannerRuntime(plan));
+  return plan;
+}
+
+class SchemaMigrationPlannerRuntime {
+  readonly plan: SchemaPlan;
+
+  constructor(plan: SchemaPlan) {
+    this.plan = plan;
+  }
+
+  rename(previousKindKey: string, nextKindKey: string) {
+    if (this.plan.drops.has(previousKindKey) ||
+      this.plan.renames.has(previousKindKey)) {
+      throw new Error(
+        `Schema migration already defines an operation for previous kind "${previousKindKey}".`,
+      );
+    }
+    for (const existingNextKey of this.plan.renames.values()) {
+      if (existingNextKey === nextKindKey) {
+        throw new Error(
+          `Schema migration already maps a previous kind to "${nextKindKey}".`,
+        );
+      }
+    }
+    this.plan.renames.set(previousKindKey, nextKindKey);
+    return this;
+  }
+
+  drop(previousKindKey: string) {
+    if (this.plan.renames.has(previousKindKey) ||
+      this.plan.drops.has(previousKindKey)) {
+      throw new Error(
+        `Schema migration already defines an operation for previous kind "${previousKindKey}".`,
+      );
+    }
+    this.plan.drops.add(previousKindKey);
+    return this;
+  }
+
+  retag(kindKey: string, previousTag: string) {
+    if (this.plan.retags.has(kindKey)) {
+      throw new Error(
+        `Schema migration already defines a retag for kind "${kindKey}".`,
+      );
+    }
+    this.plan.retags.set(kindKey, previousTag);
+    return this;
   }
 }
 

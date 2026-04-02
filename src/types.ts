@@ -67,6 +67,16 @@ export type KindMigration<T extends object> = (
 
 export type MetadataDefinitionMap = Record<string, z.ZodTypeAny>;
 
+export interface SchemaMigrationPlanner {
+  rename(previousKindKey: string, nextKindKey: string): this;
+  drop(previousKindKey: string): this;
+  retag(kindKey: string, previousTag: string): this;
+}
+
+export type SchemaDefinition = {
+  migrate(planner: SchemaMigrationPlanner): void;
+};
+
 export type MetadataValue<
   T extends MetadataDefinitionMap,
   K extends keyof T & string,
