@@ -1250,12 +1250,11 @@ function inferSqliteType(schema: any, tag: string, field: string): SqliteTypeHin
       return "text";
     case "boolean":
       return "integer";
-    case "literal":
-      return typeof schema._def.value === "number"
-        ? "integer"
-        : typeof schema._def.value === "boolean"
-          ? "integer"
-          : "text";
+    case "literal": {
+      const values = schema._def.values;
+      const value = values instanceof Set ? values.values().next().value : values?.[0];
+      return typeof value === "number" || typeof value === "boolean" ? "integer" : "text";
+    }
     case "number":
       return schema._def.checks?.some((check: any) => check.isInt) ? "integer" : "real";
     default:

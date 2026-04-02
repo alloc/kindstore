@@ -307,6 +307,148 @@ describe("kindstore", () => {
     db.close();
   });
 
+  test("infers SQLite types for supported indexed Zod schemas", () => {
+    const filename = `file:kindstore-inferred-types-${crypto.randomUUID()}?mode=memory&cache=shared`;
+    const Item = z.object({
+      title: z.string(),
+      status: z.enum(["draft", "published"]),
+      enabled: z.boolean(),
+      priority: z.number().int(),
+      score: z.number(),
+      literalText: z.literal("pinned"),
+      literalInt: z.literal(7),
+      literalBool: z.literal(true),
+      optionalText: z.string().optional(),
+      nullableScore: z.number().nullable(),
+      defaultPriority: z.number().int().default(0),
+      readonlyStatus: z.enum(["open", "closed"]).readonly(),
+      catchEnabled: z.boolean().catch(false),
+    });
+    const db = kindstore({
+      connection: { filename },
+      items: kind("itm", Item)
+        .index("title")
+        .index("status")
+        .index("enabled")
+        .index("priority")
+        .index("score")
+        .index("literalText")
+        .index("literalInt")
+        .index("literalBool")
+        .index("optionalText")
+        .index("nullableScore")
+        .index("defaultPriority")
+        .index("readonlyStatus")
+        .index("catchEnabled"),
+    });
+
+    db.items.put(db.items.newId(), {
+      title: "High",
+      status: "published",
+      enabled: true,
+      priority: 10,
+      score: 10.5,
+      literalText: "pinned",
+      literalInt: 7,
+      literalBool: true,
+      optionalText: "alpha",
+      nullableScore: 10.5,
+      readonlyStatus: "open",
+      catchEnabled: true,
+    });
+    db.items.put(db.items.newId(), {
+      title: "Low",
+      status: "draft",
+      enabled: false,
+      priority: 2,
+      score: 2.5,
+      literalText: "pinned",
+      literalInt: 7,
+      literalBool: true,
+      nullableScore: 2.5,
+      defaultPriority: 1,
+      readonlyStatus: "closed",
+      catchEnabled: false,
+    });
+
+    expect(
+      Object.fromEntries(
+        (
+          db.raw.query(`PRAGMA table_xinfo('items')`).all() as {
+            name: string;
+            type: string;
+          }[]
+        ).map((column) => [column.name, column.type]),
+      ),
+    ).toMatchObject({
+      title: "TEXT",
+      status: "TEXT",
+      enabled: "INTEGER",
+      priority: "INTEGER",
+      score: "REAL",
+      literal_text: "TEXT",
+      literal_int: "INTEGER",
+      literal_bool: "INTEGER",
+      optional_text: "TEXT",
+      nullable_score: "REAL",
+      default_priority: "INTEGER",
+      readonly_status: "TEXT",
+      catch_enabled: "INTEGER",
+    });
+    expect(
+      db.items.findMany({
+        orderBy: { priority: "asc" },
+      }),
+    ).toMatchObject([{ title: "Low" }, { title: "High" }]);
+    expect(
+      db.items.findMany({
+        orderBy: { score: "desc" },
+      }),
+    ).toMatchObject([{ title: "High" }, { title: "Low" }]);
+    db.close();
+  });
+
+  test("requires explicit SQLite hints for unsupported prefault, pipe, and transform schemas", () => {
+    const prefaultFilename = `file:kindstore-prefault-${crypto.randomUUID()}?mode=memory&cache=shared`;
+    expect(() =>
+      kindstore({
+        connection: { filename: prefaultFilename },
+        items: kind(
+          "itm",
+          z.object({
+            status: z.string().prefault("draft"),
+          }),
+        ).index("status"),
+      }),
+    ).toThrow('Kind "itm" field "status" needs an explicit SQLite type hint.');
+
+    const pipeFilename = `file:kindstore-pipe-${crypto.randomUUID()}?mode=memory&cache=shared`;
+    expect(() =>
+      kindstore({
+        connection: { filename: pipeFilename },
+        items: kind(
+          "itm",
+          z.object({
+            priority: z.string().pipe(z.number()),
+          }),
+        ).index("priority"),
+      }),
+    ).toThrow('Kind "itm" field "priority" needs an explicit SQLite type hint.');
+
+    const transformFilename = `file:kindstore-transform-${crypto.randomUUID()}?mode=memory&cache=shared`;
+    expect(() =>
+      kindstore({
+        connection: { filename: transformFilename },
+        items: kind(
+          "itm",
+          z.object({
+            priority: z.string().transform(Number),
+          }),
+        ).index("priority"),
+      }),
+    ).toThrow('Kind "itm" field "priority" needs an explicit SQLite type hint.');
+  });
+
   test("runs eager migrations before reads and indexed queries", () => {
     const filename = `file:kindstore-migrate-${crypto.randomUUID()}?mode=memory&cache=shared`;
     const TaskV1 = z.object({
