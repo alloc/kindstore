@@ -4,9 +4,9 @@ import { monotonicFactory } from "ulid";
 import { KindDefinition } from "./kind";
 import type {
   ConnectionConfig,
+  FindManyOptions,
   FindPageOptions,
   FindPageResult,
-  FindManyOptions,
   IndexDirection,
   KindDefinitionBag,
   KindId,
@@ -128,9 +128,7 @@ type KindCollectionSurface<T extends KindDefinitionBag> = {
   delete(id: KindId<T>): boolean;
   update(
     id: KindId<T>,
-    updater:
-      | PatchValue<KindInputValue<T>>
-      | ((current: KindValue<T>) => KindInputValue<T>),
+    updater: PatchValue<KindInputValue<T>> | ((current: KindValue<T>) => KindInputValue<T>),
   ): KindValue<T> | undefined;
   first(options?: FindManyOptions<T>): KindValue<T> | undefined;
   findMany(options?: FindManyOptions<T>): KindValue<T>[];
@@ -286,7 +284,11 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
   }
 
   private migrateStoreFormat(version: number) {
-    for (let currentVersion = version; currentVersion < KINDSTORE_FORMAT_VERSION; currentVersion++) {
+    for (
+      let currentVersion = version;
+      currentVersion < KINDSTORE_FORMAT_VERSION;
+      currentVersion++
+    ) {
       switch (currentVersion) {
         case 1:
           this.migrateStoreFormat1To2();
@@ -678,7 +680,9 @@ class KindCollectionRuntime<T extends KindDefinitionBag> implements KindCollecti
     this.deleteStatement = database.query(
       `DELETE FROM ${quoteIdentifier(definition.table)} WHERE "id" = ?`,
     );
-    this.updateStatement = database.query(`UPDATE ${quoteIdentifier(definition.table)} SET "payload" = ? WHERE "id" = ?`);
+    this.updateStatement = database.query(
+      `UPDATE ${quoteIdentifier(definition.table)} SET "payload" = ? WHERE "id" = ?`,
+    );
   }
 
   newId() {
@@ -695,7 +699,12 @@ class KindCollectionRuntime<T extends KindDefinitionBag> implements KindCollecti
     assertTaggedId(this.definition.definition.tag, id);
     return this.database.transaction(() => {
       const row = this.getStatement.get(id) as StoredRow | undefined;
-      const parsed = this.applyManagedTimestamps(value as Record<string, unknown>, row, Date.now(), !row);
+      const parsed = this.applyManagedTimestamps(
+        value as Record<string, unknown>,
+        row,
+        Date.now(),
+        !row,
+      );
       this.putStatement.run(id, JSON.stringify(parsed));
       return parsed;
     })();
@@ -708,9 +717,7 @@ class KindCollectionRuntime<T extends KindDefinitionBag> implements KindCollecti
 
   update(
     id: KindId<T>,
-    updater:
-      | PatchValue<KindInputValue<T>>
-      | ((current: KindValue<T>) => KindInputValue<T>),
+    updater: PatchValue<KindInputValue<T>> | ((current: KindValue<T>) => KindInputValue<T>),
   ) {
     assertTaggedId(this.definition.definition.tag, id);
     return this.database.transaction(() => {
@@ -769,16 +776,19 @@ class KindCollectionRuntime<T extends KindDefinitionBag> implements KindCollecti
     }
     return {
       items,
-      next: encodePageCursor(this.definition, orderEntries, pageRows[pageRows.length - 1]!, items.at(-1)!),
+      next: encodePageCursor(
+        this.definition,
+        orderEntries,
+        pageRows[pageRows.length - 1]!,
+        items.at(-1)!,
+      ),
     };
   }
 
   *iterate(options: FindManyOptions<T> = {}) {
     const compiled = this.compileSelect(options);
-    for (const row of this.database
-      .query(compiled.sql)
-      .iterate(...compiled.values) as IterableIterator<StoredRow>) {
-      yield this.parseRow(row);
+    for (const row of this.database.query(compiled.sql).iterate(...compiled.values)) {
+      yield this.parseRow(row as StoredRow);
     }
   }
 
@@ -1377,7 +1387,9 @@ function compilePageAfter<T extends KindDefinitionBag>(
     throw new Error(`findPage() cursor does not belong to kind "${definition.key}".`);
   }
   if (cursor.order.length !== orderBy.length) {
-    throw new Error(`findPage() cursor does not match the requested orderBy for kind "${definition.key}".`);
+    throw new Error(
+      `findPage() cursor does not match the requested orderBy for kind "${definition.key}".`,
+    );
   }
   for (const [index, [field, direction]] of cursor.order.entries()) {
     const expected = orderBy[index]!;

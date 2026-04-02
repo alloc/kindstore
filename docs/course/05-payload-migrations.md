@@ -57,9 +57,9 @@ const db = kindstore({
 
 The `migrate(version, steps)` call means:
 
-* the current payload version for this kind is `version`
-* each numbered step upgrades from one version to the next
-* missing steps are an error
+- the current payload version for this kind is `version`
+- each numbered step upgrades from one version to the next
+- missing steps are an error
 
 In the example above, the step labeled `1` upgrades rows from version 1 to
 version 2.
@@ -71,9 +71,9 @@ queries begin.
 
 That means callers do not have to:
 
-* touch old rows to upgrade them
-* handle mixed payload versions at read time
-* guess whether indexed queries are seeing stale row shapes
+- touch old rows to upgrade them
+- handle mixed payload versions at read time
+- guess whether indexed queries are seeing stale row shapes
 
 This is a major part of kindstore's model.
 
@@ -102,14 +102,14 @@ look like this:
 
 ## Practical rules
 
-* Keep migration steps small and explicit. For example, add `status` and
+- Keep migration steps small and explicit. For example, add `status` and
   `updatedAt` in one version step instead of mixing unrelated redesign work into
   the same migration.
-* Treat old persisted rows as partial input, because earlier versions may not
+- Treat old persisted rows as partial input, because earlier versions may not
   have every field your new schema expects.
-* Make the returned value satisfy the new schema completely. If version 2
+- Make the returned value satisfy the new schema completely. If version 2
   requires `status`, the migration should always produce one.
-* Add new indexes alongside the new schema version if the new fields need typed
+- Add new indexes alongside the new schema version if the new fields need typed
   querying. For example, if version 2 introduces `updatedAt` and you plan to
   order by it, declare that index in the same upgraded kind definition.
 
@@ -117,9 +117,9 @@ look like this:
 
 Payload migrations change document bodies. They do not handle:
 
-* renaming a kind in the store registry
-* deleting a previously persisted kind
-* changing a kind's tag
+- renaming a kind in the store registry
+- deleting a previously persisted kind
+- changing a kind's tag
 
 Those are structural changes and belong to store-level schema migration.
 

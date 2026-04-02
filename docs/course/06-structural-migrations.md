@@ -11,9 +11,9 @@ Payload migration rewrites document bodies inside a kind.
 
 Structural migration handles changes such as:
 
-* renaming a kind in the registry
-* deleting a previously persisted kind
-* changing a kind's tag
+- renaming a kind in the registry
+- deleting a previously persisted kind
+- changing a kind's tag
 
 These changes affect row ownership or document identity, so kindstore requires
 explicit intent instead of guessing.
@@ -44,9 +44,9 @@ const db = kindstore({
 
 This tells kindstore:
 
-* the previous `tasks` collection is now `workItems`
-* the current `workItems` kind used to have the tag `"tsk"`
-* the previous `drafts` collection should be removed
+- the previous `tasks` collection is now `workItems`
+- the current `workItems` kind used to have the tag `"tsk"`
+- the previous `drafts` collection should be removed
 
 ## Understand each operation
 
@@ -76,9 +76,9 @@ you did not provide it.
 
 Typical examples:
 
-* a previously persisted kind disappears from the registry
-* a kind changes tag without a matching `retag(...)`
-* the planner describes a contradictory or irrelevant operation
+- a previously persisted kind disappears from the registry
+- a kind changes tag without a matching `retag(...)`
+- the planner describes a contradictory or irrelevant operation
 
 This fail-closed behavior is intentional.
 
@@ -101,14 +101,14 @@ If the answer is yes, you probably need store-level schema migration.
 
 If the answer is no, it is probably either:
 
-* a payload migration, or
-* an automatically derived structural change
+- a payload migration, or
+- an automatically derived structural change
 
 For example:
 
-* adding `updatedAt` to a task payload is a payload migration
-* adding an index for `status` is an automatically derived structural change
-* renaming `tasks` to `workItems` is a structural migration
+- adding `updatedAt` to a task payload is a payload migration
+- adding an index for `status` is an automatically derived structural change
+- renaming `tasks` to `workItems` is a structural migration
 
 ## Next
 

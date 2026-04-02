@@ -11,10 +11,10 @@ A kind is the unit of storage in kindstore.
 
 Each kind combines:
 
-* a stable tag used in generated IDs
-* a Zod schema for runtime validation and type inference
-* a set of declared queryable fields
-* an optional payload migration history
+- a stable tag used in generated IDs
+- a Zod schema for runtime validation and type inference
+- a set of declared queryable fields
+- an optional payload migration history
 
 The most important decision is not the schema itself. It is deciding which
 fields deserve indexed query support.
@@ -48,9 +48,9 @@ identifiers, not presentation text.
 
 Good tag choices are:
 
-* short
-* unambiguous
-* stable across refactors
+- short
+- unambiguous
+- stable across refactors
 
 Avoid choosing tags based on temporary naming preferences, because changing a
 tag later is a structural migration rather than a harmless rename. For example,
@@ -92,8 +92,8 @@ const Tasks = kind("tsk", Task)
 
 This is the core tradeoff in kindstore:
 
-* every field stays in the document payload
-* only declared top-level fields become part of the typed query model
+- every field stays in the document payload
+- only declared top-level fields become part of the typed query model
 
 That means you should index fields based on actual query needs, not just because
 they might be useful later.
@@ -114,9 +114,9 @@ const Tasks = kind("tsk", Task)
 Use a composite index when your common query shape depends on more than one
 field. Typical examples are:
 
-* equality plus sort
-* equality plus range
-* equality plus equality
+- equality plus sort
+- equality plus range
+- equality plus equality
 
 If you do not have a real query pattern in mind, do not add the composite index
 yet. For example, adding `.multi("status_updatedAt", { status: "asc",
@@ -146,20 +146,20 @@ storage identity used in document IDs.
 
 ## Rules to internalize
 
-* Index only top-level schema fields, because the typed query API is built
+- Index only top-level schema fields, because the typed query API is built
   around declared top-level fields such as `status` or `updatedAt`, not nested
   document paths.
-* Use explicit SQLite type hints when the indexed field is numeric and you want
+- Use explicit SQLite type hints when the indexed field is numeric and you want
   integer ordering or comparison semantics. For example, `.index("updatedAt",
-  { type: "integer" })` makes the intent clear for timestamp queries.
-* Keep tags stable even if the collection name in code changes later, because
+{ type: "integer" })` makes the intent clear for timestamp queries.
+- Keep tags stable even if the collection name in code changes later, because
   the code-level collection name can be renamed with structural migration while
   the tag remains part of persisted document identity.
-* Use `.createdAt(...)` and `.updatedAt(...)` only when the store should own
+- Use `.createdAt(...)` and `.updatedAt(...)` only when the store should own
   those payload fields. For example, a user-supplied `publishedAt` field usually
   stays caller-owned, while a store-managed `updatedAt` field is a strong fit
   for `.updatedAt("updatedAt")`.
-* Model for your real query patterns, not for hypothetical ones. For example,
+- Model for your real query patterns, not for hypothetical ones. For example,
   add an index for `assigneeId` if you routinely fetch "tasks assigned to
   `usr_1`", not just because that field exists in the schema.
 

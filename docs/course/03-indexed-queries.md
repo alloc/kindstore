@@ -48,12 +48,12 @@ const tasks = db.tasks.findMany({
 
 The typed query language supports:
 
-* equality
-* `null`
-* `in`
-* `gt`, `gte`, `lt`, `lte`
-* `orderBy`
-* `limit`
+- equality
+- `null`
+- `in`
+- `gt`, `gte`, `lt`, `lte`
+- `orderBy`
+- `limit`
 
 It does not support arbitrary boolean composition or relation traversal.
 
@@ -76,11 +76,11 @@ const secondPage = db.tasks.findPage({
 
 `findPage()` is a narrow helper over the same indexed query model:
 
-* it requires explicit `orderBy`
-* it requires a positive `limit`
-* it only paginates forward
-* it adds document ID as an internal tie-breaker for deterministic paging
-* ordered fields should be non-null across page boundaries
+- it requires explicit `orderBy`
+- it requires a positive `limit`
+- it only paginates forward
+- it adds document ID as an internal tie-breaker for deterministic paging
+- ordered fields should be non-null across page boundaries
 
 ## Use `first()` when you need one row
 
@@ -116,9 +116,9 @@ at once.
 
 The most useful way to think about indexing in kindstore is:
 
-* what does the caller filter by
-* what does the caller sort by
-* what should be bounded with `limit`
+- what does the caller filter by
+- what does the caller sort by
+- what should be bounded with `limit`
 
 For example, this declaration:
 
@@ -146,15 +146,15 @@ db.tasks.findMany({
 
 If your query depends on:
 
-* undeclared fields
-* advanced boolean logic
-* joins
-* ad hoc operational inspection
+- undeclared fields
+- advanced boolean logic
+- joins
+- ad hoc operational inspection
 
 use one of these patterns:
 
-* narrow with kindstore's typed query API and finish in JavaScript
-* drop to raw SQL
+- narrow with kindstore's typed query API and finish in JavaScript
+- drop to raw SQL
 
 kindstore is intentionally strict here.
 That strictness keeps the typed API honest: when a query stops fitting the
@@ -163,15 +163,15 @@ can optimize arbitrary document queries.
 
 ## Rules to internalize
 
-* Query only on fields you declared as queryable, because kindstore's typed
+- Query only on fields you declared as queryable, because kindstore's typed
   query model is intentionally restricted to those fields.
-* Prefer `iterate()` when you want incremental processing. For example, it is a
+- Prefer `iterate()` when you want incremental processing. For example, it is a
   better fit than `findMany()` when you want to scan assigned tasks and stop
   once you find the first one that still needs follow-up.
-* Add composite indexes to match real filter-plus-sort patterns. For example, a
+- Add composite indexes to match real filter-plus-sort patterns. For example, a
   `status + updatedAt` composite index is motivated by queries like "show the
   newest tasks with status `doing`."
-* Treat `first()` without explicit ordering as meaningful only when the match is
+- Treat `first()` without explicit ordering as meaningful only when the match is
   unique, because otherwise "first" may not mean what your caller expects.
 
 ## Next

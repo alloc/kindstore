@@ -289,7 +289,7 @@ describe("kindstore", () => {
         orderBy: { updatedAt: "desc" },
         limit: 0,
       }),
-    ).toThrow('must be a positive integer when using findPage()');
+    ).toThrow("must be a positive integer when using findPage()");
     const firstPage = db.tasks.findPage({
       where: { status: "doing" },
       orderBy: { updatedAt: "desc" },

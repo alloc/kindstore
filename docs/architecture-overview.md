@@ -235,7 +235,7 @@ explain a stable contract.
 
 This document should be read first. More focused documents should cover:
 
-* [Storage Layout And Invariants](./storage-layout-and-invariants.md)
-* [Migration Pipeline](./migration-pipeline.md)
-* [Schema Reconciliation](./schema-reconciliation.md)
-* [Query And Collection Semantics](./query-and-collection-semantics.md)
+- [Storage Layout And Invariants](./storage-layout-and-invariants.md)
+- [Migration Pipeline](./migration-pipeline.md)
+- [Schema Reconciliation](./schema-reconciliation.md)
+- [Query And Collection Semantics](./query-and-collection-semantics.md)

@@ -15,9 +15,9 @@ operations.
 
 For each declared kind, the store maintains:
 
-* a physical storage area owned by that kind alone
-* the full validated document payload
-* derived query structures for explicitly declared indexed fields
+- a physical storage area owned by that kind alone
+- the full validated document payload
+- derived query structures for explicitly declared indexed fields
 
 The payload is the source of business data. Derived query structures exist only
 to support filtering and ordering on declared fields.
@@ -32,17 +32,17 @@ cross-kind document table.
 
 That separation keeps:
 
-* kind identity explicit
-* query support local to the kind that declared it
-* structural reconciliation scoped to one kind at a time
-* future schema changes easier to reason about
+- kind identity explicit
+- query support local to the kind that declared it
+- structural reconciliation scoped to one kind at a time
+- future schema changes easier to reason about
 
 ## Document representation
 
 Every persisted document has two conceptual representations:
 
-* the complete payload, validated against the kind schema
-* a limited derived projection used for indexed queries
+- the complete payload, validated against the kind schema
+- a limited derived projection used for indexed queries
 
 The payload remains the canonical representation. The derived projection is
 owned by the library and may be rebuilt from the declaration.
@@ -61,9 +61,9 @@ kindstore supports arbitrary document-path indexing.
 
 The durable rules are:
 
-* undeclared fields are stored only in the document payload
-* declared indexed fields are eligible for derived query support
-* query support is library-owned derived data, not application-owned state
+- undeclared fields are stored only in the document payload
+- declared indexed fields are eligible for derived query support
+- query support is library-owned derived data, not application-owned state
 
 ## Managed payload timestamps
 
@@ -75,14 +75,14 @@ library simply takes responsibility for assigning it on writes.
 
 Maintainers should preserve these behaviors:
 
-* a kind only gets automatic timestamp assignment if it explicitly opted in
-* an automatic creation timestamp is assigned only when a document is first
+- a kind only gets automatic timestamp assignment if it explicitly opted in
+- an automatic creation timestamp is assigned only when a document is first
   inserted
-* replacing or updating an existing document preserves its existing creation
+- replacing or updating an existing document preserves its existing creation
   timestamp when one already exists
-* an automatic modification timestamp advances on each successful write and on
+- an automatic modification timestamp advances on each successful write and on
   library-driven rewrite paths such as eager payload migration
-* timestamp assignment policy is distinct from queryability, so a managed
+- timestamp assignment policy is distinct from queryability, so a managed
   timestamp field is only queryable if it was also declared as indexed
 
 ## Tagged identity
@@ -100,8 +100,8 @@ contract is that the generated ID is opaque except for its kind tag.
 
 kindstore has two distinct metadata domains:
 
-* application-owned metadata, exposed as a typed public API
-* library-owned bookkeeping used for startup reconciliation and compatibility
+- application-owned metadata, exposed as a typed public API
+- library-owned bookkeeping used for startup reconciliation and compatibility
 
 They must remain separate.
 
@@ -121,32 +121,32 @@ provided elsewhere.
 
 This is one of the main safety boundaries in the design:
 
-* primary data is preserved conservatively
-* derived query support can be reconciled aggressively
+- primary data is preserved conservatively
+- derived query support can be reconciled aggressively
 
 ## Invariants maintainers must preserve
 
 The following storage invariants are central:
 
-* each kind owns its own physical storage area
-* the payload is the canonical source of document data
-* indexed query support is derived from the declaration, not authored directly
+- each kind owns its own physical storage area
+- the payload is the canonical source of document data
+- indexed query support is derived from the declaration, not authored directly
   by callers
-* only declared top-level fields participate in typed filtering and ordering
-* automatic payload timestamps are opt-in and remain part of the payload schema
-* application metadata is separate from library-owned bookkeeping
-* structural reconciliation may rebuild derived data, but it must not silently
+- only declared top-level fields participate in typed filtering and ordering
+- automatic payload timestamps are opt-in and remain part of the payload schema
+- application metadata is separate from library-owned bookkeeping
+- structural reconciliation may rebuild derived data, but it must not silently
   discard primary data
 
 ## What may change safely
 
 The following details may evolve without changing the architectural contract:
 
-* concrete internal table names
-* exact bookkeeping record names
-* exact SQL shape
-* exact naming rules for derived storage objects
-* exact serialization details of library-owned metadata
+- concrete internal table names
+- exact bookkeeping record names
+- exact SQL shape
+- exact naming rules for derived storage objects
+- exact serialization details of library-owned metadata
 
 If a future change only affects those details, this document should not need to
 change.
@@ -155,10 +155,10 @@ change.
 
 Read this after the overview:
 
-* [Architecture Overview](./architecture-overview.md)
+- [Architecture Overview](./architecture-overview.md)
 
 Then continue to:
 
-* [Migration Pipeline](./migration-pipeline.md)
-* [Schema Reconciliation](./schema-reconciliation.md)
-* [Query And Collection Semantics](./query-and-collection-semantics.md)
+- [Migration Pipeline](./migration-pipeline.md)
+- [Schema Reconciliation](./schema-reconciliation.md)
+- [Query And Collection Semantics](./query-and-collection-semantics.md)

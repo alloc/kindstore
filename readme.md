@@ -50,5 +50,5 @@ const firstPage = db.sessions.findPage({
 
 Next:
 
-* Start with the intermediate guides in [docs/course/README.md](./docs/course/README.md)
-* Read the maintainer-facing system docs in [docs/architecture-overview.md](./docs/architecture-overview.md)
+- Start with the intermediate guides in [docs/course/README.md](./docs/course/README.md)
+- Read the maintainer-facing system docs in [docs/architecture-overview.md](./docs/architecture-overview.md)

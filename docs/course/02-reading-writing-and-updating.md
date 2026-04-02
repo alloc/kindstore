@@ -20,9 +20,7 @@ const Task = z.object({
 
 const db = kindstore({
   connection: { filename: ":memory:" },
-  tasks: kind("tsk", Task)
-    .index("status")
-    .index("updatedAt", { type: "integer" }),
+  tasks: kind("tsk", Task).index("status").index("updatedAt", { type: "integer" }),
 });
 ```
 
@@ -56,9 +54,9 @@ exist.
 
 That means:
 
-* if the ID is new, the document is inserted
-* if the ID already exists, the stored payload is replaced
-* `put()` does not merge fields into the existing payload
+- if the ID is new, the document is inserted
+- if the ID already exists, the stored payload is replaced
+- `put()` does not merge fields into the existing payload
 
 ```ts
 db.tasks.put(id, {
@@ -130,22 +128,22 @@ const latest = db.tasks.get(id);
 
 This is the core loop for most collections:
 
-* create IDs with `newId()`
-* write full documents with `put()`
-* make targeted changes with `update()`
-* read with `get()`
+- create IDs with `newId()`
+- write full documents with `put()`
+- make targeted changes with `update()`
+- read with `get()`
 
 ## Rules to internalize
 
-* `put()` replaces the payload. It is not a merge helper. If you leave out a
+- `put()` replaces the payload. It is not a merge helper. If you leave out a
   field during `put()`, kindstore treats that as part of the new full document,
   not as "keep the old value."
-* `update()` is the typed partial-update path, so prefer it when you only want
+- `update()` is the typed partial-update path, so prefer it when you only want
   to change `status`, `updatedAt`, or another small part of the document.
-* Collection methods are tag-aware. Use the ID from the matching collection,
+- Collection methods are tag-aware. Use the ID from the matching collection,
   because a `tasks` ID should not be accepted by a different kind just because
   both are strings.
-* All typed reads and writes pass through schema validation, which is why the
+- All typed reads and writes pass through schema validation, which is why the
   typed API is the safe default and raw SQL is not.
 
 ## Next
