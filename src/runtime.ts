@@ -208,7 +208,7 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
   private bootstrap() {
     this.database.transaction(() => {
       this.ensureStoreFormatVersion();
-      this.database.exec(
+      this.database.run(
         `CREATE TABLE IF NOT EXISTS ${quoteIdentifier(APP_METADATA_TABLE)} (
           "key" TEXT PRIMARY KEY NOT NULL,
           "payload" TEXT NOT NULL,
@@ -229,7 +229,7 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
   }
 
   private ensureInternalTable() {
-    this.database.exec(
+    this.database.run(
       `CREATE TABLE IF NOT EXISTS ${quoteIdentifier(INTERNAL_TABLE)} (
         "key" TEXT PRIMARY KEY NOT NULL,
         "payload" TEXT NOT NULL,
@@ -375,7 +375,7 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
       if (this.hasTable(next.table)) {
         throw new Error(`Schema migration rename target table "${next.table}" already exists.`);
       }
-      this.database.exec(
+      this.database.run(
         `ALTER TABLE ${quoteIdentifier(previous.table)} RENAME TO ${quoteIdentifier(next.table)}`,
       );
     }
@@ -389,7 +389,7 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
       );
     }
     if (this.hasTable(previous.table)) {
-      this.database.exec(`DROP TABLE IF EXISTS ${quoteIdentifier(previous.table)}`);
+      this.database.run(`DROP TABLE IF EXISTS ${quoteIdentifier(previous.table)}`);
     }
     this.internal.deleteKindVersion(previousKey);
   }
@@ -425,7 +425,7 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
   }
 
   private ensureKindTable<T extends KindDefinitionBag>(definition: KindRuntimeDefinition<T>) {
-    this.database.exec(
+    this.database.run(
       `CREATE TABLE IF NOT EXISTS ${quoteIdentifier(definition.table)} (
         "id" TEXT PRIMARY KEY NOT NULL,
         "payload" TEXT NOT NULL,
@@ -449,7 +449,7 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
       if (existing.has(column.column)) {
         continue;
       }
-      this.database.exec(
+      this.database.run(
         `ALTER TABLE ${quoteIdentifier(definition.table)} ADD COLUMN ${quoteIdentifier(column.column)} ${column.type.toUpperCase()} GENERATED ALWAYS AS (${columnExpression(column.type, column.field)}) VIRTUAL`,
       );
     }
@@ -466,11 +466,11 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
         if (next && sameColumns(index.columns, next.columns)) {
           continue;
         }
-        this.database.exec(`DROP INDEX IF EXISTS ${quoteIdentifier(index.sqliteName)}`);
+        this.database.run(`DROP INDEX IF EXISTS ${quoteIdentifier(index.sqliteName)}`);
       }
     }
     for (const index of Object.values(current)) {
-      this.database.exec(
+      this.database.run(
         `CREATE INDEX IF NOT EXISTS ${quoteIdentifier(index.sqliteName)} ON ${quoteIdentifier(definition.table)} (${index.columns.join(", ")})`,
       );
     }
@@ -497,7 +497,7 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
       if (currentColumns.has(column.column) || !existingColumns.has(column.column)) {
         continue;
       }
-      this.database.exec(
+      this.database.run(
         `ALTER TABLE ${quoteIdentifier(definition.table)} DROP COLUMN ${quoteIdentifier(column.column)}`,
       );
     }
