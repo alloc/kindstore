@@ -26,6 +26,7 @@ const LEGACY_KIND_VERSIONS_TABLE = "__kindstore_kind_versions";
 const LEGACY_APP_METADATA_TABLE = "__kindstore_metadata";
 const STORE_FORMAT_VERSION_KEY = "store_format_version";
 const KIND_VERSIONS_KEY = "kind_versions";
+const SCHEMA_SNAPSHOT_KEY = "schema_snapshot";
 const RESERVED_STORE_KEYS = new Set([
   "batch",
   "close",
@@ -60,6 +61,32 @@ type KindRuntimeDefinition<T extends KindDefinitionBag> = {
   table: string;
   columns: Map<string, IndexColumn>;
   definition: KindDefinition<T>;
+};
+
+type SnapshotIndex = {
+  sqliteName: string;
+  columns: readonly string[];
+};
+
+type SnapshotKind = {
+  tag: string;
+  table: string;
+  version: number;
+  columns: Record<
+    string,
+    {
+      field: string;
+      column: string;
+      type: SqliteTypeHint;
+      single: boolean;
+    }
+  >;
+  indexes: Record<string, SnapshotIndex>;
+};
+
+type StoreSchemaSnapshot = {
+  kindstoreVersion: number;
+  kinds: Record<string, SnapshotKind>;
 };
 
 type CompiledQuery = {
@@ -187,12 +214,18 @@ class KindstoreRuntime<
         "updated_at" INTEGER NOT NULL
       ) STRICT`,
     );
+    const previousSnapshot = this.internal.getSchemaSnapshot();
     for (const definition of this.kinds.values()) {
       this.ensureKindTable(definition);
       this.ensureGeneratedColumns(definition);
-      this.ensureIndexes(definition);
+      this.reconcileIndexes(definition, previousSnapshot?.kinds[definition.key]);
+      this.dropStaleGeneratedColumns(
+        definition,
+        previousSnapshot?.kinds[definition.key],
+      );
       this.migrateKind(definition);
     }
+    this.internal.setSchemaSnapshot(this.createSchemaSnapshot());
   }
 
   private ensureInternalTable() {
@@ -287,22 +320,65 @@ class KindstoreRuntime<
     }
   }
 
-  private ensureIndexes<T extends KindDefinitionBag>(
+  private reconcileIndexes<T extends KindDefinitionBag>(
     definition: KindRuntimeDefinition<T>,
+    previous: SnapshotKind | undefined,
   ) {
-    for (const column of definition.columns.values()) {
-      if (!column.single) {
+    const current = snapshotIndexes(definition);
+    if (previous) {
+      for (const index of Object.values(previous.indexes)) {
+        const next = current[index.sqliteName];
+        if (next && sameColumns(index.columns, next.columns)) {
+          continue;
+        }
+        this.database.exec(
+          `DROP INDEX IF EXISTS ${quoteIdentifier(index.sqliteName)}`,
+        );
+      }
+    }
+    for (const index of Object.values(current)) {
+      this.database.exec(
+        `CREATE INDEX IF NOT EXISTS ${quoteIdentifier(index.sqliteName)} ON ${quoteIdentifier(definition.table)} (${index.columns.join(", ")})`,
+      );
+    }
+  }
+
+  private dropStaleGeneratedColumns<T extends KindDefinitionBag>(
+    definition: KindRuntimeDefinition<T>,
+    previous: SnapshotKind | undefined,
+  ) {
+    if (!previous) {
+      return;
+    }
+    const currentColumns = new Set(
+      Array.from(definition.columns.values(), (column) => column.column),
+    );
+    const existingColumns = new Set(
+      (
+        this.database
+          .query(`PRAGMA table_xinfo(${quoteString(definition.table)})`)
+          .all() as { name: string }[]
+      ).map((column) => column.name),
+    );
+    for (const column of Object.values(previous.columns)) {
+      if (currentColumns.has(column.column) || !existingColumns.has(column.column)) {
         continue;
       }
       this.database.exec(
-        `CREATE INDEX IF NOT EXISTS ${quoteIdentifier(indexName(definition.table, column.column))} ON ${quoteIdentifier(definition.table)} (${quoteIdentifier(column.column)})`,
+        `ALTER TABLE ${quoteIdentifier(definition.table)} DROP COLUMN ${quoteIdentifier(column.column)}`,
       );
     }
-    for (const multiIndex of definition.definition.multiIndexes) {
-      this.database.exec(
-        `CREATE INDEX IF NOT EXISTS ${quoteIdentifier(indexName(definition.table, snakeCase(multiIndex.name)))} ON ${quoteIdentifier(definition.table)} (${multiIndex.fields.map(([field, direction]) => `${quoteIdentifier(definition.columns.get(field)!.column)} ${direction.toUpperCase()}`).join(", ")})`,
-      );
+  }
+
+  private createSchemaSnapshot(): StoreSchemaSnapshot {
+    const kinds: Record<string, SnapshotKind> = {};
+    for (const [key, definition] of this.kinds) {
+      kinds[key] = snapshotKind(definition);
     }
+    return {
+      kindstoreVersion: KINDSTORE_FORMAT_VERSION,
+      kinds,
+    };
   }
 
   private migrateKind<T extends KindDefinitionBag>(
@@ -599,6 +675,18 @@ class InternalMetadataRuntime {
         : { [kind]: version };
     this.set(KIND_VERSIONS_KEY, next);
   }
+
+  getSchemaSnapshot() {
+    const snapshot = this.get(SCHEMA_SNAPSHOT_KEY);
+    if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) {
+      return undefined;
+    }
+    return snapshot as StoreSchemaSnapshot;
+  }
+
+  setSchemaSnapshot(snapshot: StoreSchemaSnapshot) {
+    this.set(SCHEMA_SNAPSHOT_KEY, snapshot);
+  }
 }
 
 function normalizeKinds<TKinds extends KindRegistry>(kinds: TKinds) {
@@ -839,6 +927,59 @@ function indexName(table: string, suffix: string) {
 function columnName(field: string) {
   const column = snakeCase(field);
   return RESERVED_COLUMN_NAMES.has(column) ? `doc_${column}` : column;
+}
+
+function snapshotKind<T extends KindDefinitionBag>(
+  definition: KindRuntimeDefinition<T>,
+): SnapshotKind {
+  const columns: SnapshotKind["columns"] = {};
+  for (const column of definition.columns.values()) {
+    columns[column.field] = {
+      field: column.field,
+      column: column.column,
+      type: column.type,
+      single: column.single,
+    };
+  }
+  return {
+    tag: definition.definition.tag,
+    table: definition.table,
+    version: definition.definition.version,
+    columns,
+    indexes: snapshotIndexes(definition),
+  };
+}
+
+function snapshotIndexes<T extends KindDefinitionBag>(
+  definition: KindRuntimeDefinition<T>,
+) {
+  const indexes: Record<string, SnapshotIndex> = {};
+  for (const column of definition.columns.values()) {
+    if (!column.single) {
+      continue;
+    }
+    const sqliteName = indexName(definition.table, column.column);
+    indexes[sqliteName] = {
+      sqliteName,
+      columns: [quoteIdentifier(column.column)],
+    };
+  }
+  for (const multiIndex of definition.definition.multiIndexes) {
+    const sqliteName = indexName(definition.table, snakeCase(multiIndex.name));
+    indexes[sqliteName] = {
+      sqliteName,
+      columns: multiIndex.fields.map(
+        ([field, direction]) =>
+          `${quoteIdentifier(definition.columns.get(field)!.column)} ${direction.toUpperCase()}`,
+      ),
+    };
+  }
+  return indexes;
+}
+
+function sameColumns(left: readonly string[], right: readonly string[]) {
+  return left.length === right.length &&
+    left.every((value, index) => value === right[index]);
 }
 
 function quoteIdentifier(value: string) {

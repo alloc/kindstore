@@ -149,6 +149,13 @@ describe("kindstore", () => {
         .query(`SELECT "payload" FROM "__kindstore_internal" WHERE "key" = 'kind_versions'`)
         .get(),
     ).toEqual({ payload: '{"sessions":1}' });
+    expect(
+      db.raw
+        .query(`SELECT "payload" FROM "__kindstore_internal" WHERE "key" = 'schema_snapshot'`)
+        .get(),
+    ).toEqual({
+      payload: expect.stringContaining('"kindstoreVersion":1'),
+    });
 
     const mirrored = kindstore({
       connection: { filename },
@@ -226,6 +233,13 @@ describe("kindstore", () => {
         .query(`SELECT "payload" FROM "__kindstore_internal" WHERE "key" = 'kind_versions'`)
         .get(),
     ).toEqual({ payload: '{"tasks":2}' });
+    expect(
+      migrated.raw
+        .query(`SELECT "payload" FROM "__kindstore_internal" WHERE "key" = 'schema_snapshot'`)
+        .get(),
+    ).toEqual({
+      payload: expect.stringContaining('"tasks"'),
+    });
     migrated.close();
     initial.close();
   });
@@ -250,5 +264,63 @@ describe("kindstore", () => {
       }),
     ).toThrow("missing the kindstore format version");
     db.close();
+  });
+
+  test("reconciles stale derived indexes and generated columns from the previous snapshot", () => {
+    const filename = `file:kindstore-reconcile-${crypto.randomUUID()}?mode=memory&cache=shared`;
+    const Session = z.object({
+      userId: z.string(),
+      status: z.enum(["active", "revoked", "expired"]),
+      expiresAt: z.number().int(),
+      updatedAt: z.number().int(),
+      deviceId: z.string().optional(),
+    });
+    const initial = kindstore({
+      connection: { filename },
+      sessions: kind("ses", Session)
+        .index("userId")
+        .index("status")
+        .index("expiresAt", { type: "integer" })
+        .index("updatedAt", { type: "integer" })
+        .index("deviceId")
+        .multi("user_updatedAt", { userId: "asc", updatedAt: "desc" }),
+    });
+    initial.sessions.put(initial.sessions.newId(), {
+      userId: "usr_1",
+      status: "active",
+      expiresAt: 1,
+      updatedAt: 2,
+      deviceId: "mobile:ios",
+    });
+
+    const narrowed = kindstore({
+      connection: { filename },
+      sessions: kind("ses", Session).index("userId").index("status"),
+    });
+    expect(
+      (
+        narrowed.raw
+          .query(`PRAGMA table_xinfo('sessions')`)
+          .all() as { name: string }[]
+      ).map((column) => column.name),
+    ).toEqual([
+      "id",
+      "payload",
+      "created_at",
+      "updated_at",
+      "user_id",
+      "status",
+    ]);
+    expect(
+      (
+        narrowed.raw
+          .query(`SELECT "name" FROM "sqlite_master" WHERE "type" = 'index' AND "tbl_name" = 'sessions' ORDER BY "name" ASC`)
+          .all() as { name: string }[]
+      )
+        .map((index) => index.name)
+        .filter((name) => !name.startsWith("sqlite_autoindex_")),
+    ).toEqual(["idx_sessions_status", "idx_sessions_user_id"]);
+    narrowed.close();
+    initial.close();
   });
 });
