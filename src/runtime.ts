@@ -163,13 +163,18 @@ export function createStore<
   schemaDefinition?: SchemaDefinition,
 ) {
   const database = new Database(connection.filename, connection.options);
-  const runtime = new KindstoreRuntime<TKinds, TMetadata>(
-    database,
-    normalizeKinds(kinds),
-    metadataDefinitions,
-    normalizeSchemaPlan(schemaDefinition),
-  );
-  return runtime.publicStore as PublicKindstore<TKinds, TMetadata>;
+  try {
+    const runtime = new KindstoreRuntime<TKinds, TMetadata>(
+      database,
+      normalizeKinds(kinds),
+      metadataDefinitions,
+      normalizeSchemaPlan(schemaDefinition),
+    );
+    return runtime.publicStore as PublicKindstore<TKinds, TMetadata>;
+  } catch (error) {
+    database.close();
+    throw error;
+  }
 }
 
 class KindstoreRuntime<
@@ -217,29 +222,34 @@ class KindstoreRuntime<
   }
 
   private bootstrap() {
-    this.ensureStoreFormatVersion();
-    this.database.exec(
-      `CREATE TABLE IF NOT EXISTS ${quoteIdentifier(APP_METADATA_TABLE)} (
-        "key" TEXT PRIMARY KEY NOT NULL,
-        "payload" TEXT NOT NULL,
-        "created_at" INTEGER NOT NULL,
-        "updated_at" INTEGER NOT NULL
-      ) STRICT`,
-    );
-    const previousSnapshot = this.applySchemaMigrations(
-      this.internal.getSchemaSnapshot(),
-    );
-    for (const definition of this.kinds.values()) {
-      this.ensureKindTable(definition);
-      this.ensureGeneratedColumns(definition);
-      this.reconcileIndexes(definition, previousSnapshot?.kinds[definition.key]);
-      this.dropStaleGeneratedColumns(
-        definition,
-        previousSnapshot?.kinds[definition.key],
+    this.database.transaction(() => {
+      this.ensureStoreFormatVersion();
+      this.database.exec(
+        `CREATE TABLE IF NOT EXISTS ${quoteIdentifier(APP_METADATA_TABLE)} (
+          "key" TEXT PRIMARY KEY NOT NULL,
+          "payload" TEXT NOT NULL,
+          "created_at" INTEGER NOT NULL,
+          "updated_at" INTEGER NOT NULL
+        ) STRICT`,
       );
-      this.migrateKind(definition);
-    }
-    this.internal.setSchemaSnapshot(this.createSchemaSnapshot());
+      const previousSnapshot = this.applySchemaMigrations(
+        this.internal.getSchemaSnapshot(),
+      );
+      for (const definition of this.kinds.values()) {
+        this.ensureKindTable(definition);
+        this.ensureGeneratedColumns(definition);
+        this.reconcileIndexes(
+          definition,
+          previousSnapshot?.kinds[definition.key],
+        );
+        this.dropStaleGeneratedColumns(
+          definition,
+          previousSnapshot?.kinds[definition.key],
+        );
+        this.migrateKind(definition);
+      }
+      this.internal.setSchemaSnapshot(this.createSchemaSnapshot());
+    })();
   }
 
   private ensureInternalTable() {

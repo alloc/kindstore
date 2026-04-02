@@ -339,6 +339,12 @@ describe("kindstore", () => {
         authSessions: kind("ses", Session).index("userId"),
       }),
     ).toThrow('Previous kind "sessions" is missing');
+    const reopened = kindstore({
+      connection: { filename },
+      sessions: kind("ses", Session).index("userId"),
+    });
+    expect(reopened.sessions.findMany()).toEqual([]);
+    reopened.close();
     initial.close();
   });
 
@@ -452,6 +458,80 @@ describe("kindstore", () => {
       retagged.raw.query(`SELECT "id" FROM "users"`).all(),
     ).toEqual([{ id: retaggedId }]);
     retagged.close();
+    initial.close();
+  });
+
+  test("rolls back failed schema reconciliation without mutating the existing store", () => {
+    const filename = `file:kindstore-rollback-schema-${crypto.randomUUID()}?mode=memory&cache=shared`;
+    const Session = z.object({
+      userId: z.string(),
+    });
+    const initial = kindstore({
+      connection: { filename },
+      sessions: kind("ses", Session).index("userId"),
+    });
+    const sessionId = initial.sessions.newId();
+    initial.sessions.put(sessionId, {
+      userId: "usr_1",
+    });
+    expect(() =>
+      kindstore({
+        connection: { filename },
+        authSessions: kind("ses", Session).index("userId"),
+      }),
+    ).toThrow();
+    const reopened = kindstore({
+      connection: { filename },
+      sessions: kind("ses", Session).index("userId"),
+    });
+    expect(reopened.sessions.get(sessionId)).toEqual({
+      userId: "usr_1",
+    });
+    expect(
+      reopened.raw
+        .query(`SELECT "payload" FROM "__kindstore_internal" WHERE "key" = 'kind_versions'`)
+        .get(),
+    ).toEqual({ payload: '{"sessions":1}' });
+    reopened.close();
+    initial.close();
+  });
+
+  test("rolls back failed payload migrations without advancing kind versions", () => {
+    const filename = `file:kindstore-rollback-data-${crypto.randomUUID()}?mode=memory&cache=shared`;
+    const TaskV1 = z.object({
+      title: z.string(),
+    });
+    const initial = kindstore({
+      connection: { filename },
+      tasks: kind("tsk", TaskV1),
+    });
+    const taskId = initial.tasks.newId();
+    initial.tasks.put(taskId, { title: "Ship v1" });
+    const TaskV2 = z.object({
+      title: z.string(),
+      status: z.enum(["open", "done"]),
+    });
+    expect(() =>
+      kindstore({
+        connection: { filename },
+        tasks: kind("tsk", TaskV2).migrate(2, {
+          1: () => {
+            throw new Error("boom");
+          },
+        }),
+      }),
+    ).toThrow("boom");
+    const reopened = kindstore({
+      connection: { filename },
+      tasks: kind("tsk", TaskV1),
+    });
+    expect(reopened.tasks.get(taskId)).toEqual({ title: "Ship v1" });
+    expect(
+      reopened.raw
+        .query(`SELECT "payload" FROM "__kindstore_internal" WHERE "key" = 'kind_versions'`)
+        .get(),
+    ).toEqual({ payload: '{"tasks":1}' });
+    reopened.close();
     initial.close();
   });
 });
