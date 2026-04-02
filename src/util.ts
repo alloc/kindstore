@@ -11,11 +11,7 @@ export function isFilterOperators(value: unknown): value is {
     !!value &&
     typeof value === "object" &&
     !Array.isArray(value) &&
-    ("in" in value ||
-      "gt" in value ||
-      "gte" in value ||
-      "lt" in value ||
-      "lte" in value)
+    ("in" in value || "gt" in value || "gte" in value || "lt" in value || "lte" in value)
   );
 }
 
@@ -40,8 +36,7 @@ export function indexName(table: string, suffix: string) {
 }
 
 export function sameColumns(left: readonly string[], right: readonly string[]) {
-  return left.length === right.length &&
-    left.every((value, index) => value === right[index]);
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
@@ -49,10 +44,7 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export function isSqliteTypeHint(value: string): value is SqliteTypeHint {
-  return value === "text" ||
-    value === "integer" ||
-    value === "real" ||
-    value === "numeric";
+  return value === "text" || value === "integer" || value === "real" || value === "numeric";
 }
 
 export function quoteIdentifier(value: string) {

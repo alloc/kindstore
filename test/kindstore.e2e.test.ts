@@ -111,9 +111,7 @@ describe("kindstore", () => {
       .query(`SELECT "created_at", "updated_at" FROM "sessions" WHERE "id" = ?`)
       .get(activeId) as { created_at: number; updated_at: number };
     expect(timestampsAfter.created_at).toBe(timestampsBefore.created_at);
-    expect(timestampsAfter.updated_at).toBeGreaterThanOrEqual(
-      timestampsBefore.updated_at,
-    );
+    expect(timestampsAfter.updated_at).toBeGreaterThanOrEqual(timestampsBefore.updated_at);
     expect(db.metadata.get("app")).toBeUndefined();
     expect(
       db.metadata.set("app", {
@@ -141,9 +139,7 @@ describe("kindstore", () => {
       });
     });
     expect(
-      db.raw
-        .query(`SELECT count(*) AS count FROM "sessions" WHERE "user_id" = ?`)
-        .get("usr_1"),
+      db.raw.query(`SELECT count(*) AS count FROM "sessions" WHERE "user_id" = ?`).get("usr_1"),
     ).toEqual({ count: 1 });
     expect(
       db.raw
@@ -271,9 +267,7 @@ describe("kindstore", () => {
       connection: { filename },
       sessions: kind("ses", Session).index("userId").index("status"),
     });
-    db.raw
-      .query(`DELETE FROM "__kindstore_internal" WHERE "key" = 'store_format_version'`)
-      .run();
+    db.raw.query(`DELETE FROM "__kindstore_internal" WHERE "key" = 'store_format_version'`).run();
     expect(() =>
       kindstore({
         connection: { filename },
@@ -357,23 +351,16 @@ describe("kindstore", () => {
       sessions: kind("ses", Session).index("userId").index("status"),
     });
     expect(
-      (
-        narrowed.raw
-          .query(`PRAGMA table_xinfo('sessions')`)
-          .all() as { name: string }[]
-      ).map((column) => column.name),
-    ).toEqual([
-      "id",
-      "payload",
-      "created_at",
-      "updated_at",
-      "user_id",
-      "status",
-    ]);
+      (narrowed.raw.query(`PRAGMA table_xinfo('sessions')`).all() as { name: string }[]).map(
+        (column) => column.name,
+      ),
+    ).toEqual(["id", "payload", "created_at", "updated_at", "user_id", "status"]);
     expect(
       (
         narrowed.raw
-          .query(`SELECT "name" FROM "sqlite_master" WHERE "type" = 'index' AND "tbl_name" = 'sessions' ORDER BY "name" ASC`)
+          .query(
+            `SELECT "name" FROM "sqlite_master" WHERE "type" = 'index' AND "tbl_name" = 'sessions' ORDER BY "name" ASC`,
+          )
           .all() as { name: string }[]
       )
         .map((index) => index.name)
@@ -437,11 +424,7 @@ describe("kindstore", () => {
       renamed.raw
         .query(`SELECT "name" FROM "sqlite_master" WHERE "type" = 'table' ORDER BY "name" ASC`)
         .all(),
-    ).toEqual(
-      expect.arrayContaining([
-        { name: "auth_sessions" },
-      ]),
-    );
+    ).toEqual(expect.arrayContaining([{ name: "auth_sessions" }]));
     expect(
       renamed.raw
         .query(`SELECT "payload" FROM "__kindstore_internal" WHERE "key" = 'kind_versions'`)
@@ -531,9 +514,7 @@ describe("kindstore", () => {
     expect(retagged.users.get(retaggedId as never)).toEqual({
       email: "jane@example.com",
     });
-    expect(
-      retagged.raw.query(`SELECT "id" FROM "users"`).all(),
-    ).toEqual([{ id: retaggedId }]);
+    expect(retagged.raw.query(`SELECT "id" FROM "users"`).all()).toEqual([{ id: retaggedId }]);
     retagged.close();
     initial.close();
   });

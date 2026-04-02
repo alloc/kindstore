@@ -8,11 +8,7 @@ import type {
   MetadataDefinitionMap,
   SchemaDefinition,
 } from "./types";
-import type {
-  PublicKindCollection,
-  PublicKindstore,
-  PublicMetadataCollection,
-} from "./runtime";
+import type { PublicKindCollection, PublicKindstore, PublicMetadataCollection } from "./runtime";
 
 type AnyStoreInput = {
   connection: ConnectionConfig;
@@ -28,16 +24,15 @@ type InferKinds<TInput extends AnyStoreInput> = {
       : never]: Extract<TInput[K], KindDefinition<any>>;
 };
 
-type InferMetadata<TInput extends AnyStoreInput> =
-  TInput extends { metadata: infer TMetadata extends MetadataDefinitionMap }
-    ? TMetadata
-    : {};
+type InferMetadata<TInput extends AnyStoreInput> = TInput extends {
+  metadata: infer TMetadata extends MetadataDefinitionMap;
+}
+  ? TMetadata
+  : {};
 
-export type KindCollection<T extends import("./types").KindDefinitionBag> =
-  PublicKindCollection<T>;
+export type KindCollection<T extends import("./types").KindDefinitionBag> = PublicKindCollection<T>;
 
-export type MetadataCollection<T extends MetadataDefinitionMap> =
-  PublicMetadataCollection<T>;
+export type MetadataCollection<T extends MetadataDefinitionMap> = PublicMetadataCollection<T>;
 
 export type Kindstore<
   TKinds extends KindRegistry,

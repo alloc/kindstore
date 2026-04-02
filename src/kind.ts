@@ -47,9 +47,7 @@ export class KindDefinition<T extends KindDefinitionBag> {
       single: true,
       type: options.type ?? current?.type,
     });
-    return this as unknown as KindDefinition<
-      Omit<T, "indexed"> & { indexed: T["indexed"] | TKey }
-    >;
+    return this as unknown as KindDefinition<Omit<T, "indexed"> & { indexed: T["indexed"] | TKey }>;
   }
 
   multi<
@@ -65,7 +63,7 @@ export class KindDefinition<T extends KindDefinitionBag> {
       fields: entries,
     });
     return this as unknown as KindDefinition<
-      Omit<T, "indexed"> & { indexed: T["indexed"] | keyof TFields & string }
+      Omit<T, "indexed"> & { indexed: T["indexed"] | (keyof TFields & string) }
     >;
   }
 
@@ -78,9 +76,7 @@ export class KindDefinition<T extends KindDefinitionBag> {
     }
     this.version = version as T["version"];
     this.migrations = steps;
-    return this as unknown as KindDefinition<
-      Omit<T, "version"> & { version: TVersion }
-    >;
+    return this as unknown as KindDefinition<Omit<T, "version"> & { version: TVersion }>;
   }
 }
 

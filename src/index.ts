@@ -24,9 +24,4 @@ export type {
   TaggedId,
   WhereOperand,
 } from "./types";
-export type {
-  KindCollection,
-  Kindstore,
-  MetadataCollection,
-  MetadataSchemas,
-} from "./store";
+export type { KindCollection, Kindstore, MetadataCollection, MetadataSchemas } from "./store";

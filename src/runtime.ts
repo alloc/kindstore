@@ -40,19 +40,8 @@ const LEGACY_APP_METADATA_TABLE = "__kindstore_metadata";
 const STORE_FORMAT_VERSION_KEY = "store_format_version";
 const KIND_VERSIONS_KEY = "kind_versions";
 const SCHEMA_SNAPSHOT_KEY = "schema_snapshot";
-const RESERVED_STORE_KEYS = new Set([
-  "batch",
-  "close",
-  "connection",
-  "metadata",
-  "raw",
-]);
-const RESERVED_COLUMN_NAMES = new Set([
-  "id",
-  "payload",
-  "created_at",
-  "updated_at",
-]);
+const RESERVED_STORE_KEYS = new Set(["batch", "close", "connection", "metadata", "raw"]);
+const RESERVED_COLUMN_NAMES = new Set(["id", "payload", "created_at", "updated_at"]);
 const nextUlid = monotonicFactory();
 
 type StoredRow = {
@@ -120,9 +109,7 @@ type KindCollectionSurface<T extends KindDefinitionBag> = {
   delete(id: KindId<T>): boolean;
   update(
     id: KindId<T>,
-    updater:
-      | PatchValue<KindValue<T>>
-      | ((current: KindValue<T>) => KindValue<T>),
+    updater: PatchValue<KindValue<T>> | ((current: KindValue<T>) => KindValue<T>),
   ): KindValue<T> | undefined;
   first(options?: FindManyOptions<T>): KindValue<T> | undefined;
   findMany(options?: FindManyOptions<T>): KindValue<T>[];
@@ -131,10 +118,7 @@ type KindCollectionSurface<T extends KindDefinitionBag> = {
 
 type MetadataSurface<T extends MetadataDefinitionMap> = {
   get<K extends keyof T & string>(key: K): MetadataValue<T, K> | undefined;
-  set<K extends keyof T & string>(
-    key: K,
-    value: MetadataValue<T, K>,
-  ): MetadataValue<T, K>;
+  set<K extends keyof T & string>(key: K, value: MetadataValue<T, K>): MetadataValue<T, K>;
   delete<K extends keyof T & string>(key: K): boolean;
   update<K extends keyof T & string>(
     key: K,
@@ -142,10 +126,7 @@ type MetadataSurface<T extends MetadataDefinitionMap> = {
   ): MetadataValue<T, K>;
 };
 
-type KindStoreSurface<
-  TKinds extends KindRegistry,
-  TMetadata extends MetadataDefinitionMap,
-> = {
+type KindStoreSurface<TKinds extends KindRegistry, TMetadata extends MetadataDefinitionMap> = {
   readonly raw: Database;
   readonly metadata: MetadataSurface<TMetadata>;
   batch<TResult>(callback: () => TResult): TResult;
@@ -156,19 +137,14 @@ type KindStoreSurface<
     : never;
 };
 
-export type PublicKindCollection<T extends KindDefinitionBag> =
-  KindCollectionSurface<T>;
-export type PublicMetadataCollection<T extends MetadataDefinitionMap> =
-  MetadataSurface<T>;
+export type PublicKindCollection<T extends KindDefinitionBag> = KindCollectionSurface<T>;
+export type PublicMetadataCollection<T extends MetadataDefinitionMap> = MetadataSurface<T>;
 export type PublicKindstore<
   TKinds extends KindRegistry,
   TMetadata extends MetadataDefinitionMap,
 > = KindStoreSurface<TKinds, TMetadata>;
 
-export function createStore<
-  TKinds extends KindRegistry,
-  TMetadata extends MetadataDefinitionMap,
->(
+export function createStore<TKinds extends KindRegistry, TMetadata extends MetadataDefinitionMap>(
   connection: ConnectionConfig,
   kinds: TKinds,
   metadataDefinitions: TMetadata,
@@ -176,7 +152,7 @@ export function createStore<
 ) {
   const database = new Database(connection.filename, connection.options);
   try {
-    const runtime = new KindstoreRuntime<TKinds, TMetadata>(
+    const runtime = new KindstoreRuntime<TMetadata>(
       database,
       normalizeKinds(kinds),
       metadataDefinitions,
@@ -189,10 +165,7 @@ export function createStore<
   }
 }
 
-class KindstoreRuntime<
-  TKinds extends KindRegistry,
-  TMetadata extends MetadataDefinitionMap,
-> {
+class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
   readonly database: Database;
   readonly kinds: Map<string, KindRuntimeDefinition<any>>;
   readonly publicStore: Record<string, unknown>;
@@ -215,8 +188,7 @@ class KindstoreRuntime<
     this.bootstrap();
     this.metadata = new MetadataRuntime(database, metadataDefinitions);
     this.publicStore.raw = database;
-    this.publicStore.metadata =
-      this.metadata as PublicMetadataCollection<TMetadata>;
+    this.publicStore.metadata = this.metadata as PublicMetadataCollection<TMetadata>;
     for (const [key, definition] of kinds) {
       this.publicStore[key] = new KindCollectionRuntime(
         database,
@@ -244,20 +216,12 @@ class KindstoreRuntime<
           "updated_at" INTEGER NOT NULL
         ) STRICT`,
       );
-      const previousSnapshot = this.applySchemaMigrations(
-        this.internal.getSchemaSnapshot(),
-      );
+      const previousSnapshot = this.applySchemaMigrations(this.internal.getSchemaSnapshot());
       for (const definition of this.kinds.values()) {
         this.ensureKindTable(definition);
         this.ensureGeneratedColumns(definition);
-        this.reconcileIndexes(
-          definition,
-          previousSnapshot?.kinds[definition.key],
-        );
-        this.dropStaleGeneratedColumns(
-          definition,
-          previousSnapshot?.kinds[definition.key],
-        );
+        this.reconcileIndexes(definition, previousSnapshot?.kinds[definition.key]);
+        this.dropStaleGeneratedColumns(definition, previousSnapshot?.kinds[definition.key]);
         this.migrateKind(definition);
       }
       this.internal.setSchemaSnapshot(this.createSchemaSnapshot());
@@ -301,10 +265,7 @@ class KindstoreRuntime<
   }
 
   private hasExistingStoreArtifacts() {
-    if (
-      this.hasTable(LEGACY_KIND_VERSIONS_TABLE) ||
-      this.hasTable(LEGACY_APP_METADATA_TABLE)
-    ) {
+    if (this.hasTable(LEGACY_KIND_VERSIONS_TABLE) || this.hasTable(LEGACY_APP_METADATA_TABLE)) {
       return true;
     }
     for (const definition of this.kinds.values()) {
@@ -317,9 +278,7 @@ class KindstoreRuntime<
 
   private hasTable(name: string) {
     return !!this.database
-      .query(
-        `SELECT 1 AS "exists" FROM "sqlite_master" WHERE "type" = 'table' AND "name" = ?`,
-      )
+      .query(`SELECT 1 AS "exists" FROM "sqlite_master" WHERE "type" = 'table' AND "name" = ?`)
       .get(name);
   }
 
@@ -410,15 +369,11 @@ class KindstoreRuntime<
       );
     }
     if (!this.hasTable(previous.table)) {
-      throw new Error(
-        `Schema migration rename source table "${previous.table}" does not exist.`,
-      );
+      throw new Error(`Schema migration rename source table "${previous.table}" does not exist.`);
     }
     if (previous.table !== next.table) {
       if (this.hasTable(next.table)) {
-        throw new Error(
-          `Schema migration rename target table "${next.table}" already exists.`,
-        );
+        throw new Error(`Schema migration rename target table "${next.table}" already exists.`);
       }
       this.database.exec(
         `ALTER TABLE ${quoteIdentifier(previous.table)} RENAME TO ${quoteIdentifier(next.table)}`,
@@ -434,9 +389,7 @@ class KindstoreRuntime<
       );
     }
     if (this.hasTable(previous.table)) {
-      this.database.exec(
-        `DROP TABLE IF EXISTS ${quoteIdentifier(previous.table)}`,
-      );
+      this.database.exec(`DROP TABLE IF EXISTS ${quoteIdentifier(previous.table)}`);
     }
     this.internal.deleteKindVersion(previousKey);
   }
@@ -458,25 +411,20 @@ class KindstoreRuntime<
     const updateIds = this.database.query(
       `UPDATE ${quoteIdentifier(current.table)} SET "id" = ? WHERE "id" = ?`,
     );
-    for (const row of this.database.query(
-      `SELECT "id" FROM ${quoteIdentifier(current.table)} ORDER BY "id" ASC`,
-    ).iterate() as IterableIterator<{ id: string }>) {
+    for (const row of this.database
+      .query(`SELECT "id" FROM ${quoteIdentifier(current.table)} ORDER BY "id" ASC`)
+      .iterate() as IterableIterator<{ id: string }>) {
       if (!row.id.startsWith(`${previous.tag}_`)) {
         throw new Error(
           `Kind "${key}" cannot retag row "${row.id}" because it does not use the previous tag prefix "${previous.tag}_".`,
         );
       }
-      updateIds.run(
-        `${current.definition.tag}_${row.id.slice(previous.tag.length + 1)}`,
-        row.id,
-      );
+      updateIds.run(`${current.definition.tag}_${row.id.slice(previous.tag.length + 1)}`, row.id);
     }
     return true;
   }
 
-  private ensureKindTable<T extends KindDefinitionBag>(
-    definition: KindRuntimeDefinition<T>,
-  ) {
+  private ensureKindTable<T extends KindDefinitionBag>(definition: KindRuntimeDefinition<T>) {
     this.database.exec(
       `CREATE TABLE IF NOT EXISTS ${quoteIdentifier(definition.table)} (
         "id" TEXT PRIMARY KEY NOT NULL,
@@ -492,9 +440,9 @@ class KindstoreRuntime<
   ) {
     const existing = new Set(
       (
-        this.database
-          .query(`PRAGMA table_xinfo(${quoteString(definition.table)})`)
-          .all() as { name: string }[]
+        this.database.query(`PRAGMA table_xinfo(${quoteString(definition.table)})`).all() as {
+          name: string;
+        }[]
       ).map((column) => column.name),
     );
     for (const column of definition.columns.values()) {
@@ -518,9 +466,7 @@ class KindstoreRuntime<
         if (next && sameColumns(index.columns, next.columns)) {
           continue;
         }
-        this.database.exec(
-          `DROP INDEX IF EXISTS ${quoteIdentifier(index.sqliteName)}`,
-        );
+        this.database.exec(`DROP INDEX IF EXISTS ${quoteIdentifier(index.sqliteName)}`);
       }
     }
     for (const index of Object.values(current)) {
@@ -542,9 +488,9 @@ class KindstoreRuntime<
     );
     const existingColumns = new Set(
       (
-        this.database
-          .query(`PRAGMA table_xinfo(${quoteString(definition.table)})`)
-          .all() as { name: string }[]
+        this.database.query(`PRAGMA table_xinfo(${quoteString(definition.table)})`).all() as {
+          name: string;
+        }[]
       ).map((column) => column.name),
     );
     for (const column of Object.values(previous.columns)) {
@@ -568,9 +514,7 @@ class KindstoreRuntime<
     };
   }
 
-  private migrateKind<T extends KindDefinitionBag>(
-    definition: KindRuntimeDefinition<T>,
-  ) {
+  private migrateKind<T extends KindDefinitionBag>(definition: KindRuntimeDefinition<T>) {
     const version = this.internal.getKindVersion(definition.key);
     if (version == null) {
       this.internal.setKindVersion(definition.key, definition.definition.version);
@@ -596,9 +540,11 @@ class KindstoreRuntime<
     this.database.transaction(() => {
       const now = Date.now();
       const context: KindMigrationContext = { now };
-      for (const row of this.database.query(
-        `SELECT "id", "payload", "created_at", "updated_at" FROM ${quoteIdentifier(definition.table)} ORDER BY "id" ASC`,
-      ).iterate() as IterableIterator<StoredRow>) {
+      for (const row of this.database
+        .query(
+          `SELECT "id", "payload", "created_at", "updated_at" FROM ${quoteIdentifier(definition.table)} ORDER BY "id" ASC`,
+        )
+        .iterate() as IterableIterator<StoredRow>) {
         let value = parsePayload(row.payload);
         for (
           let currentVersion = version;
@@ -611,25 +557,19 @@ class KindstoreRuntime<
               `Kind "${definition.key}" is missing migration step ${currentVersion} -> ${currentVersion + 1}.`,
             );
           }
-          value = step(
-            value as Partial<KindValue<T>> & Record<string, unknown>,
-            context,
-          ) as Record<string, unknown>;
+          value = step(value as Partial<KindValue<T>> & Record<string, unknown>, context) as Record<
+            string,
+            unknown
+          >;
         }
-        updateRow.run(
-          JSON.stringify(definition.definition.schema.parse(value)),
-          now,
-          row.id,
-        );
+        updateRow.run(JSON.stringify(definition.definition.schema.parse(value)), now, row.id);
       }
       this.internal.setKindVersion(definition.key, definition.definition.version);
     })();
   }
 }
 
-class KindCollectionRuntime<T extends KindDefinitionBag>
-  implements KindCollectionSurface<T>
-{
+class KindCollectionRuntime<T extends KindDefinitionBag> implements KindCollectionSurface<T> {
   readonly database: Database;
   readonly definition: KindRuntimeDefinition<T>;
   readonly getStatement;
@@ -680,9 +620,7 @@ class KindCollectionRuntime<T extends KindDefinitionBag>
 
   update(
     id: KindId<T>,
-    updater:
-      | PatchValue<KindValue<T>>
-      | ((current: KindValue<T>) => KindValue<T>),
+    updater: PatchValue<KindValue<T>> | ((current: KindValue<T>) => KindValue<T>),
   ) {
     assertTaggedId(this.definition.definition.tag, id);
     return this.database.transaction(() => {
@@ -728,10 +666,7 @@ class KindCollectionRuntime<T extends KindDefinitionBag>
   }
 
   private compileSelect(options: FindManyOptions<T>) {
-    if (
-      options.limit != null &&
-      (!Number.isInteger(options.limit) || options.limit < 0)
-    ) {
+    if (options.limit != null && (!Number.isInteger(options.limit) || options.limit < 0)) {
       throw new Error(
         `Query limit for kind "${this.definition.key}" must be a non-negative integer.`,
       );
@@ -740,17 +675,12 @@ class KindCollectionRuntime<T extends KindDefinitionBag>
     const orderBy = compileOrderBy(this.definition.columns, options.orderBy);
     return {
       sql: `SELECT "id", "payload", "created_at", "updated_at" FROM ${quoteIdentifier(this.definition.table)}${where.sql}${orderBy}${options.limit == null ? "" : " LIMIT ?"}`,
-      values:
-        options.limit == null
-          ? where.values
-          : [...where.values, options.limit],
+      values: options.limit == null ? where.values : [...where.values, options.limit],
     };
   }
 }
 
-class MetadataRuntime<T extends MetadataDefinitionMap>
-  implements MetadataSurface<T>
-{
+class MetadataRuntime<T extends MetadataDefinitionMap> implements MetadataSurface<T> {
   readonly database: Database;
   readonly definitions: T;
   readonly getStatement;
@@ -853,9 +783,9 @@ class InternalMetadataRuntime {
 
   keys() {
     return (
-      this.database.query(
-        `SELECT "key" FROM ${quoteIdentifier(INTERNAL_TABLE)} ORDER BY "key" ASC`,
-      ).all() as { key: string }[]
+      this.database
+        .query(`SELECT "key" FROM ${quoteIdentifier(INTERNAL_TABLE)} ORDER BY "key" ASC`)
+        .all() as { key: string }[]
     ).map((row) => row.key);
   }
 
@@ -904,39 +834,47 @@ class InternalMetadataRuntime {
     if (snapshot == null) {
       return undefined;
     }
-    if (!isRecord(snapshot) ||
+    if (
+      !isRecord(snapshot) ||
       !Number.isInteger(snapshot.kindstoreVersion) ||
-      !isRecord(snapshot.kinds)) {
+      !isRecord(snapshot.kinds)
+    ) {
       throw new Error(`Internal metadata key "${SCHEMA_SNAPSHOT_KEY}" is malformed.`);
     }
     for (const [kindKey, kind] of Object.entries(snapshot.kinds)) {
-      if (!isRecord(kind) ||
+      if (
+        !isRecord(kind) ||
         typeof kind.tag !== "string" ||
         typeof kind.table !== "string" ||
         !Number.isInteger(kind.version) ||
         !isRecord(kind.columns) ||
-        !isRecord(kind.indexes)) {
+        !isRecord(kind.indexes)
+      ) {
         throw new Error(
           `Internal metadata key "${SCHEMA_SNAPSHOT_KEY}" has an invalid kind entry for "${kindKey}".`,
         );
       }
       for (const [field, column] of Object.entries(kind.columns)) {
-        if (!isRecord(column) ||
+        if (
+          !isRecord(column) ||
           column.field !== field ||
           typeof column.column !== "string" ||
           typeof column.type !== "string" ||
           !isSqliteTypeHint(column.type) ||
-          typeof column.single !== "boolean") {
+          typeof column.single !== "boolean"
+        ) {
           throw new Error(
             `Internal metadata key "${SCHEMA_SNAPSHOT_KEY}" has an invalid column entry for "${kindKey}.${field}".`,
           );
         }
       }
       for (const [indexName, index] of Object.entries(kind.indexes)) {
-        if (!isRecord(index) ||
+        if (
+          !isRecord(index) ||
           index.sqliteName !== indexName ||
           !Array.isArray(index.columns) ||
-          index.columns.some((column) => typeof column !== "string")) {
+          index.columns.some((column) => typeof column !== "string")
+        ) {
           throw new Error(
             `Internal metadata key "${SCHEMA_SNAPSHOT_KEY}" has an invalid index entry for "${kindKey}.${indexName}".`,
           );
@@ -958,9 +896,7 @@ class InternalMetadataRuntime {
     if (!isRecord(versions)) {
       throw new Error(`Internal metadata key "${KIND_VERSIONS_KEY}" is malformed.`);
     }
-    for (const [kind, version] of Object.entries(
-      versions as Record<string, unknown>,
-    )) {
+    for (const [kind, version] of Object.entries(versions as Record<string, unknown>)) {
       if (typeof version !== "number" || !Number.isInteger(version) || version < 1) {
         throw new Error(
           `Internal metadata key "${KIND_VERSIONS_KEY}" has an invalid version for "${kind}".`,
@@ -1000,17 +936,14 @@ class SchemaMigrationPlannerRuntime {
         `Schema migration rename from "${previousKindKey}" to itself is not allowed.`,
       );
     }
-    if (this.plan.drops.has(previousKindKey) ||
-      this.plan.renames.has(previousKindKey)) {
+    if (this.plan.drops.has(previousKindKey) || this.plan.renames.has(previousKindKey)) {
       throw new Error(
         `Schema migration already defines an operation for previous kind "${previousKindKey}".`,
       );
     }
     for (const existingNextKey of this.plan.renames.values()) {
       if (existingNextKey === nextKindKey) {
-        throw new Error(
-          `Schema migration already maps a previous kind to "${nextKindKey}".`,
-        );
+        throw new Error(`Schema migration already maps a previous kind to "${nextKindKey}".`);
       }
     }
     this.plan.renames.set(previousKindKey, nextKindKey);
@@ -1021,8 +954,7 @@ class SchemaMigrationPlannerRuntime {
     if (!previousKindKey) {
       throw new Error("Schema migration drop key must be non-empty.");
     }
-    if (this.plan.renames.has(previousKindKey) ||
-      this.plan.drops.has(previousKindKey)) {
+    if (this.plan.renames.has(previousKindKey) || this.plan.drops.has(previousKindKey)) {
       throw new Error(
         `Schema migration already defines an operation for previous kind "${previousKindKey}".`,
       );
@@ -1036,9 +968,7 @@ class SchemaMigrationPlannerRuntime {
       throw new Error("Schema migration retag arguments must be non-empty.");
     }
     if (this.plan.retags.has(kindKey)) {
-      throw new Error(
-        `Schema migration already defines a retag for kind "${kindKey}".`,
-      );
+      throw new Error(`Schema migration already defines a retag for kind "${kindKey}".`);
     }
     this.plan.retags.set(kindKey, previousTag);
     return this;
@@ -1092,9 +1022,7 @@ function normalizeColumns<T extends KindDefinitionBag>(definition: KindDefinitio
       field: index.field,
       column,
       single: index.single,
-      type:
-        index.type ??
-        inferSqliteType(shape[index.field], definition.tag, index.field),
+      type: index.type ?? inferSqliteType(shape[index.field], definition.tag, index.field),
     });
   }
   for (const multiIndex of definition.multiIndexes) {
@@ -1121,11 +1049,7 @@ function normalizeColumns<T extends KindDefinitionBag>(definition: KindDefinitio
   return columns;
 }
 
-function assertTopLevelField(
-  tag: string,
-  shape: Record<string, unknown>,
-  field: string,
-) {
+function assertTopLevelField(tag: string, shape: Record<string, unknown>, field: string) {
   if (!(field in shape)) {
     throw new Error(`Kind "${tag}" references unknown field "${field}".`);
   }
@@ -1154,13 +1078,9 @@ function inferSqliteType(schema: any, tag: string, field: string): SqliteTypeHin
           ? "integer"
           : "text";
     case "number":
-      return schema._def.checks?.some((check: any) => check.isInt)
-        ? "integer"
-        : "real";
+      return schema._def.checks?.some((check: any) => check.isInt) ? "integer" : "real";
     default:
-      throw new Error(
-        `Kind "${tag}" field "${field}" needs an explicit SQLite type hint.`,
-      );
+      throw new Error(`Kind "${tag}" field "${field}" needs an explicit SQLite type hint.`);
   }
 }
 
@@ -1267,9 +1187,7 @@ function snapshotKind<T extends KindDefinitionBag>(
   };
 }
 
-function snapshotIndexes<T extends KindDefinitionBag>(
-  definition: KindRuntimeDefinition<T>,
-) {
+function snapshotIndexes<T extends KindDefinitionBag>(definition: KindRuntimeDefinition<T>) {
   const indexes: Record<string, SnapshotIndex> = {};
   for (const column of definition.columns.values()) {
     if (!column.single) {

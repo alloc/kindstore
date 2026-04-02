@@ -35,10 +35,7 @@ export type FilterOperators<T> = {
   lte?: Exclude<T, undefined>;
 };
 
-export type WhereOperand<T> =
-  | Exclude<T, undefined>
-  | null
-  | FilterOperators<T>;
+export type WhereOperand<T> = Exclude<T, undefined> | null | FilterOperators<T>;
 
 export type KindWhere<T extends KindDefinitionBag> = Partial<{
   [K in KindIndexedField<T>]: WhereOperand<KindValue<T>[K]>;
@@ -77,10 +74,9 @@ export type SchemaDefinition = {
   migrate(planner: SchemaMigrationPlanner): void;
 };
 
-export type MetadataValue<
-  T extends MetadataDefinitionMap,
-  K extends keyof T & string,
-> = z.output<T[K]>;
+export type MetadataValue<T extends MetadataDefinitionMap, K extends keyof T & string> = z.output<
+  T[K]
+>;
 
 export type KindRegistry = Record<string, KindDefinition<any>>;
 
