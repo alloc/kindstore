@@ -68,8 +68,8 @@ const TimestampedTask = z.object({
 });
 
 const TimestampedTasks = kind("tsk", TimestampedTask)
-  .createdAt("createdAt")
-  .updatedAt("updatedAt")
+  .createdAt()
+  .updatedAt()
   .index("updatedAt", { type: "integer" });
 ```
 
@@ -78,7 +78,7 @@ than caller-owned data. The benefit is that callers do not need to assign or
 preserve those values manually, while the fields still live in the payload
 schema readers work with.
 
-Notice that `.updatedAt("updatedAt")` does not imply `.index("updatedAt")`.
+Notice that `.updatedAt()` does not imply `.index("updatedAt")`.
 One is about value assignment policy. The other is about query intent.
 
 ## Declare only the fields you will actually query
@@ -158,7 +158,7 @@ storage identity used in document IDs.
 - Use `.createdAt(...)` and `.updatedAt(...)` only when the store should own
   those payload fields. For example, a user-supplied `publishedAt` field usually
   stays caller-owned, while a store-managed `updatedAt` field is a strong fit
-  for `.updatedAt("updatedAt")`.
+  for `.updatedAt()`.
 - Model for your real query patterns, not for hypothetical ones. For example,
   add an index for `assigneeId` if you routinely fetch "tasks assigned to
   `usr_1`", not just because that field exists in the schema.

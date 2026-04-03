@@ -41,7 +41,7 @@ You can declare the new version and its upgrade step on the kind:
 const db = kindstore({
   connection: { filename: ":memory:" },
   tasks: kind("tsk", TaskV2)
-    .updatedAt("updatedAt")
+    .updatedAt()
     .index("status")
     .index("updatedAt", { type: "integer" })
     .migrate(2, {
@@ -86,7 +86,7 @@ derived defaults without calling `Date.now()` repeatedly inside the migration
 loop.
 
 In the example above, `updatedAt` does not need `context.now` because the kind
-declared `.updatedAt("updatedAt")`, so the store assigns it automatically on
+declared `.updatedAt()`, so the store assigns it automatically on
 migration rewrites too.
 
 If a later migration also introduced a separate timestamp field, a step could
