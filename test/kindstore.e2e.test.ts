@@ -48,6 +48,8 @@ describe("kindstore", () => {
       expiresAt: now + 20_000,
     });
     expect(activeId.startsWith("ses_")).toBe(true);
+    expect(active.id).toBe(activeId);
+    expect(revoked.id).toBe(revokedId);
     expect(active.createdAt).toBe(active.updatedAt);
     expect(revoked.createdAt).toBe(revoked.updatedAt);
     expect(db.sessions.get(activeId)).toEqual(active);
@@ -75,6 +77,7 @@ describe("kindstore", () => {
         status: "expired",
       }),
     ).toEqual({
+      id: activeId,
       userId: "usr_1",
       status: "expired",
       expiresAt: now + 10_000,
@@ -93,6 +96,7 @@ describe("kindstore", () => {
         updatedAt: 1,
       })),
     ).toEqual({
+      id: activeId,
       userId: "usr_1",
       status: "active",
       expiresAt: now + 10_000,
@@ -192,6 +196,7 @@ describe("kindstore", () => {
       },
     });
     expect(mirrored.sessions.get(activeId)).toEqual({
+      id: activeId,
       userId: "usr_1",
       status: "active",
       expiresAt: now + 30_000,
@@ -231,6 +236,7 @@ describe("kindstore", () => {
     });
 
     expect(created).toEqual({
+      id: expect.stringMatching(/^tsk_/),
       title: "Ship docs",
       status: "todo",
     });
@@ -666,6 +672,20 @@ describe("kindstore", () => {
         .createdAt("timestamp")
         .updatedAt("timestamp"),
     ).toThrow('cannot use "timestamp" for both createdAt and updatedAt');
+    expect(() =>
+      kindstore({
+        filename,
+        schema: {
+          users: kind(
+            "usr",
+            z.object({
+              id: z.string(),
+              email: z.string(),
+            }),
+          ),
+        },
+      }),
+    ).toThrow('Kind "usr" cannot declare reserved payload field "id".');
   });
 
   test("defaults managed timestamp field names when omitted", () => {
@@ -801,6 +821,7 @@ describe("kindstore", () => {
       },
     });
     expect(renamed.authSessions.get(sessionId as never)).toEqual({
+      id: sessionId as never,
       userId: "usr_1",
     });
     expect(
@@ -903,6 +924,7 @@ describe("kindstore", () => {
     });
     const retaggedId = userId.replace("usr_", "per_");
     expect(retagged.users.get(retaggedId as never)).toEqual({
+      id: retaggedId as never,
       email: "jane@example.com",
     });
     expect(retagged.raw.query(`SELECT "id" FROM "users"`).all()).toEqual([{ id: retaggedId }]);
@@ -957,12 +979,15 @@ describe("kindstore", () => {
     });
     const retaggedUserId = userId.replace("usr_", "per_");
     expect(retagged.users.get(retaggedUserId as never)).toEqual({
+      id: retaggedUserId as never,
       email: "jane@example.com",
     });
     expect(retagged.sessions.get(sessionId)).toEqual({
+      id: sessionId,
       userId: "usr_1",
     });
     expect(retagged.devices.get(deviceId)).toEqual({
+      id: deviceId,
       serial: "dev-001",
     });
     retagged.close();
@@ -975,9 +1000,11 @@ describe("kindstore", () => {
       schema: droppedSchema,
     });
     expect(dropped.users.get(retaggedUserId as never)).toEqual({
+      id: retaggedUserId as never,
       email: "jane@example.com",
     });
     expect(dropped.sessions.get(sessionId)).toEqual({
+      id: sessionId,
       userId: "usr_1",
     });
     expect(
@@ -995,9 +1022,11 @@ describe("kindstore", () => {
       schema: renamedSchema,
     });
     expect(renamed.authSessions.get(sessionId as never)).toEqual({
+      id: sessionId as never,
       userId: "usr_1",
     });
     expect(renamed.users.get(retaggedUserId as never)).toEqual({
+      id: retaggedUserId as never,
       email: "jane@example.com",
     });
     expect(
@@ -1012,9 +1041,11 @@ describe("kindstore", () => {
       schema: renamedSchema,
     });
     expect(reopened.authSessions.get(sessionId as never)).toEqual({
+      id: sessionId as never,
       userId: "usr_1",
     });
     expect(reopened.users.get(retaggedUserId as never)).toEqual({
+      id: retaggedUserId as never,
       email: "jane@example.com",
     });
     expect(
@@ -1057,6 +1088,7 @@ describe("kindstore", () => {
       },
     });
     expect(reopened.sessions.get(sessionId)).toEqual({
+      id: sessionId,
       userId: "usr_1",
     });
     expect(
@@ -1103,7 +1135,7 @@ describe("kindstore", () => {
         tasks: kind("tsk", TaskV1),
       },
     });
-    expect(reopened.tasks.get(taskId)).toEqual({ title: "Ship v1" });
+    expect(reopened.tasks.get(taskId)).toEqual({ id: taskId, title: "Ship v1" });
     expect(
       reopened.raw
         .query(`SELECT "payload" FROM "__kindstore_internal" WHERE "key" = 'kind_versions'`)

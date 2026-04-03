@@ -41,6 +41,8 @@ Each collection provides:
 
 The durable contract is:
 
+- `id` is a store-owned document field, not an application-owned payload field
+- kind schemas may not declare a top-level `id` field
 - callers may rely on the tag prefix matching the collection
 - callers should otherwise treat the generated suffix as opaque
 - collection methods reject IDs that do not belong to the collection's tag
@@ -53,15 +55,15 @@ The durable contract is:
 stores it as a new document.
 
 It is equivalent to calling `put(newId(), value)` and returns the validated
-stored value.
+stored value, including the generated `id`.
 
 ### `get(id)`
 
-`get(id)` returns the validated document for that ID, or `undefined` if no
-document exists.
+`get(id)` returns the validated document for that ID, including the store-owned
+`id` field, or `undefined` if no document exists.
 
-Returned values should be treated as schema-validated output, not raw stored
-JSON.
+Returned values should be treated as schema-validated output plus the
+store-owned `id`, not raw stored JSON.
 
 ### `first(options?)`
 
@@ -73,15 +75,16 @@ If callers need deterministic results, they should supply an explicit order.
 
 ### `findMany(options?)`
 
-`findMany` returns an eager array of matching validated documents.
+`findMany` returns an eager array of matching validated documents, each
+including its `id`.
 
 It is the convenience API for callers who want the full result set materialized
 in memory.
 
 ### `findPage(options)`
 
-`findPage` returns one eager page of matching validated documents plus an
-optional cursor for the next page.
+`findPage` returns one eager page of matching validated documents, each
+including its `id`, plus an optional cursor for the next page.
 
 Its durable contract is intentionally narrow:
 
@@ -95,7 +98,8 @@ Its durable contract is intentionally narrow:
 
 ### `iterate(options?)`
 
-`iterate` returns a lazy iterator over matching validated documents.
+`iterate` returns a lazy iterator over matching validated documents, each
+including its `id`.
 
 It exists for cases where callers want to process results incrementally rather
 than materialize them all at once.
@@ -116,7 +120,7 @@ The durable behavior is replacement-oriented:
 - if the kind opted into an automatic modification timestamp, replacement
   assigns a fresh value for that field
 
-`put` returns the validated stored value.
+`put` returns the validated stored value, including the store-owned `id`.
 
 ### `update(id, updater)`
 
@@ -135,6 +139,9 @@ modification timestamps advance on each successful update, while existing
 creation timestamps are preserved.
 
 If the document does not exist, `update` returns `undefined`.
+
+If it succeeds, `update` returns the validated stored value, including the
+store-owned `id`.
 
 ### `delete(id)`
 

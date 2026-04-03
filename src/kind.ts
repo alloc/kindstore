@@ -36,7 +36,7 @@ export class KindBuilder<T extends KindDefinition> {
   updatedAtField?: T["updatedAt"];
   readonly indexes = new Map<string, IndexDefinition>();
   readonly multiIndexes: MultiIndexDefinition[] = [];
-  migrations?: Record<number, KindMigration<KindValue<T>>>;
+  migrations?: Record<number, KindMigration<z.output<T["schema"]>>>;
 
   constructor(tag: T["tag"], schema: T["schema"], version: T["version"]) {
     this.tag = tag;
@@ -106,7 +106,7 @@ export class KindBuilder<T extends KindDefinition> {
 
   migrate<const TVersion extends number>(
     version: TVersion,
-    steps: Record<number, KindMigration<KindValue<T>>>,
+    steps: Record<number, KindMigration<z.output<T["schema"]>>>,
   ) {
     if (!Number.isInteger(version) || version < 1) {
       throw new Error(`Kind "${this.tag}" version must be a positive integer.`);

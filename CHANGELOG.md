@@ -3,6 +3,7 @@
 ## 0.3.0
 
 - Added `collection.create(value)` as a one-step helper that allocates a fresh tagged ID and persists the document.
+- Breaking: reserved `id` as a store-owned document field, removed it from application payload schemas, and now include it in typed read and write results.
 
 ## 0.2.1
 

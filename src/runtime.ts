@@ -558,10 +558,10 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
               `Kind "${definition.key}" is missing migration step ${currentVersion} -> ${currentVersion + 1}.`,
             );
           }
-          value = step(value as Partial<KindValue<T>> & Record<string, unknown>, context) as Record<
-            string,
-            unknown
-          >;
+          value = step(
+            value as Partial<ReturnType<T["schema"]["parse"]>> & Record<string, unknown>,
+            context,
+          ) as Record<string, unknown>;
         }
         updateRow.run(
           JSON.stringify(
@@ -621,13 +621,13 @@ class KindCollectionRuntime<T extends KindDefinition> implements KindCollection<
       const row = this.getStatement.get(id) as StoredRow | undefined;
       const parsed = applyManagedTimestamps(
         this.definition,
-        value as Record<string, unknown>,
+        stripDocumentId(value as Record<string, unknown>),
         row ? parsePayload(row.payload) : undefined,
         Date.now(),
         !row,
       );
       this.putStatement.run(id, JSON.stringify(parsed));
-      return parsed;
+      return this.attachId(id, parsed);
     })();
   }
 
@@ -647,17 +647,19 @@ class KindCollectionRuntime<T extends KindDefinition> implements KindCollection<
         return undefined;
       }
       const current = this.parseRow(row);
-      const parsed = applyManagedTimestamps(
-        this.definition,
+      const nextValue =
         typeof updater === "function"
           ? (updater(current) as Record<string, unknown>)
-          : ({ ...current, ...updater } as Record<string, unknown>),
+          : ({ ...current, ...updater } as Record<string, unknown>);
+      const parsed = applyManagedTimestamps(
+        this.definition,
+        stripDocumentId(nextValue),
         parsePayload(row.payload),
         Date.now(),
         false,
       );
       this.updateStatement.run(JSON.stringify(parsed), id);
-      return parsed;
+      return this.attachId(id, parsed);
     })();
   }
 
@@ -715,7 +717,15 @@ class KindCollectionRuntime<T extends KindDefinition> implements KindCollection<
   }
 
   private parseRow(row: StoredRow) {
+    return this.attachId(row.id as KindId<T>, this.parsePayload(row));
+  }
+
+  private parsePayload(row: StoredRow) {
     return this.definition.definition.schema.parse(parsePayload(row.payload));
+  }
+
+  private attachId(id: KindId<T>, value: Record<string, unknown>) {
+    return { id, ...value } as KindValue<T>;
   }
 
   private compileSelect(options: FindManyOptions<T>) {
@@ -1052,6 +1062,7 @@ function normalizeKinds<TKinds extends KindRegistry>(kinds: TKinds) {
       throw new Error(`Kind key "${key}" collides with an existing table name.`);
     }
     const shape = value.schema.shape as Record<string, unknown>;
+    validateReservedPayloadFields(value.tag, shape);
     if (value.createdAtField && value.createdAtField === value.updatedAtField) {
       throw new Error(
         `Kind "${value.tag}" cannot use "${value.createdAtField}" for both createdAt and updatedAt.`,
@@ -1120,6 +1131,12 @@ function normalizeColumns<T extends KindDefinition>(definition: KindBuilder<T>) 
 function assertTopLevelField(tag: string, shape: Record<string, unknown>, field: string) {
   if (!(field in shape)) {
     throw new Error(`Kind "${tag}" references unknown field "${field}".`);
+  }
+}
+
+function validateReservedPayloadFields(tag: string, shape: Record<string, unknown>) {
+  if ("id" in shape) {
+    throw new Error(`Kind "${tag}" cannot declare reserved payload field "id".`);
   }
 }
 
@@ -1485,4 +1502,9 @@ function applyManagedTimestamps<T extends KindDefinition>(
     next[definition.updatedAtField] = now;
   }
   return definition.definition.schema.parse(next);
+}
+
+function stripDocumentId(value: Record<string, unknown>) {
+  const { id: _id, ...payload } = value;
+  return payload;
 }

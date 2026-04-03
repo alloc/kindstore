@@ -24,7 +24,6 @@ import type {
 test("type-level validation of core primitives", () => {
   // Define a mock schema and kind
   const userSchema = z.object({
-    id: z.string(),
     name: z.string(),
     age: z.number(),
     status: z.enum(["active", "inactive"]).optional(),
@@ -43,7 +42,7 @@ test("type-level validation of core primitives", () => {
 
   // KindValue exactly matches the schema output
   expectTypeOf<KindValue<UserBag>>().toEqualTypeOf<{
-    id: string;
+    id: KindId<UserBag>;
     name: string;
     age: number;
     status?: "active" | "inactive" | undefined;
@@ -53,14 +52,12 @@ test("type-level validation of core primitives", () => {
 
   // KindInputValue allows omitting managed timestamps
   expectTypeOf<KindInputValue<UserBag>>().toMatchTypeOf<{
-    id: string;
     name: string;
     age: number;
     status?: "active" | "inactive" | undefined;
   }>();
   // ... but allows providing them
   expectTypeOf<KindInputValue<UserBag>>().toMatchTypeOf<{
-    id: string;
     name: string;
     age: number;
     createdAt?: number;
@@ -143,6 +140,7 @@ test("type-level validation of kindstore constructor", () => {
 
   expectTypeOf(db.tasks.findMany()).toEqualTypeOf<
     Array<{
+      id: `tsk_${string}`;
       title: string;
       status: "todo" | "doing" | "done";
     }>
@@ -153,6 +151,7 @@ test("type-level validation of kindstore constructor", () => {
       status: "todo",
     }),
   ).toEqualTypeOf<{
+    id: `tsk_${string}`;
     title: string;
     status: "todo" | "doing" | "done";
   }>();

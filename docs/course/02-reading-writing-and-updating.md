@@ -37,6 +37,7 @@ const task = db.tasks.create({
 ```
 
 `create()` allocates a fresh tagged ID, validates the value, and stores it.
+The returned document includes the generated `id`.
 
 If you need to choose or hold the ID yourself, use `newId()` and `put()`
 directly:
@@ -57,8 +58,8 @@ db.tasks.put(id, {
 const task = db.tasks.get(id);
 ```
 
-`get()` returns the validated document or `undefined` when the ID does not
-exist.
+`get()` returns the validated document, including its `id`, or `undefined` when
+the ID does not exist.
 
 ## Understand `put`
 
@@ -156,6 +157,8 @@ This is the core loop for most collections:
 - Collection methods are tag-aware. Use the ID from the matching collection,
   because a `tasks` ID should not be accepted by a different kind just because
   both are strings.
+- `id` is store-owned. Do not declare it in the kind schema or try to treat it
+  as ordinary payload input.
 - All typed reads and writes pass through schema validation, which is why the
   typed API is the safe default and raw SQL is not.
 
