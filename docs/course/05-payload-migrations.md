@@ -109,8 +109,9 @@ look like this:
 - Keep migration steps small and explicit. For example, add `status` and
   `updatedAt` in one version step instead of mixing unrelated redesign work into
   the same migration.
-- Treat `id` as store-owned. Payload migration steps should rewrite document
-  bodies, not assign or depend on the document ID living inside the payload.
+- Treat `id` as store-owned, and `data` as reserved for storage. Payload
+  migration steps should rewrite document bodies, not assign or depend on
+  either field living inside the payload.
 - Treat old persisted rows as partial input, because earlier versions may not
   have every field your new schema expects.
 - Make the returned value satisfy the new schema completely. If version 2

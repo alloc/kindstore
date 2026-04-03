@@ -21,13 +21,13 @@ export function assertTaggedId<TTag extends string>(tag: TTag, id: TaggedId<TTag
   }
 }
 
-export function parsePayload(payload: string) {
-  return JSON.parse(payload) as Record<string, unknown>;
+export function parseRowData(rowData: string) {
+  return JSON.parse(rowData) as Record<string, unknown>;
 }
 
 export function columnExpression(type: SqliteTypeHint, field: string) {
   const path = `$."${field.replaceAll('"', '""')}"`;
-  const extract = `json_extract("kindstore_payload", '${path}')`;
+  const extract = `json_extract("data", '${path}')`;
   return type === "text" ? extract : `CAST(${extract} AS ${type.toUpperCase()})`;
 }
 

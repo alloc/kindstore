@@ -4,7 +4,7 @@
 
 - Added `collection.create(value)` as a one-step helper that allocates a fresh tagged ID and persists the document.
 - Breaking: reserved `id` as a store-owned document field, removed it from application payload schemas, and now include it in typed read and write results.
-- Breaking: renamed the internal document storage column from `payload` to `kindstore_payload`, which also removes the need to remap indexed payload field names.
+- Breaking: renamed the internal document storage column to `data`, reserved `data` in document schemas, and use `RowData` as the internal term for persisted document bodies.
 
 ## 0.2.1
 

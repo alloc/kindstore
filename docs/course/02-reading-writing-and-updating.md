@@ -157,8 +157,9 @@ This is the core loop for most collections:
 - Collection methods are tag-aware. Use the ID from the matching collection,
   because a `tasks` ID should not be accepted by a different kind just because
   both are strings.
-- `id` is store-owned. Do not declare it in the kind schema or try to treat it
-  as ordinary payload input.
+- `id` is store-owned, and `data` is reserved for storage. Do not declare
+  either field in the kind schema or try to treat them as ordinary payload
+  input.
 - All typed reads and writes pass through schema validation, which is why the
   typed API is the safe default and raw SQL is not.
 

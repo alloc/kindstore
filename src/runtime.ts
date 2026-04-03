@@ -29,7 +29,7 @@ import {
   isFilterOperators,
   isRecord,
   isSqliteTypeHint,
-  parsePayload,
+  parseRowData,
   quoteIdentifier,
   quoteString,
   sameColumns,
@@ -43,13 +43,13 @@ const STORE_FORMAT_VERSION_KEY = "store_format_version";
 const KIND_VERSIONS_KEY = "kind_versions";
 const SCHEMA_SNAPSHOT_KEY = "schema_snapshot";
 const RESERVED_STORE_KEYS = new Set(["batch", "close", "connection", "metadata", "raw"]);
-const DOCUMENT_PAYLOAD_COLUMN = "kindstore_payload";
+const DOCUMENT_ROW_DATA_COLUMN = "data";
 const nextUlid = monotonicFactory();
 const PAGE_CURSOR_VERSION = 1;
 
 type StoredRow = {
   id: string;
-  kindstore_payload: string;
+  rowData: string;
 };
 
 type IndexColumn = {
@@ -111,7 +111,7 @@ type ResolvedOrderByEntry = {
   column: IndexColumn;
 };
 
-type PageCursorPayload = {
+type PageCursorData = {
   version: typeof PAGE_CURSOR_VERSION;
   tag: string;
   order: Array<readonly [field: string, direction: IndexDirection]>;
@@ -433,7 +433,7 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
     this.database.run(
       `CREATE TABLE IF NOT EXISTS ${quoteIdentifier(definition.table)} (
         "id" TEXT PRIMARY KEY NOT NULL,
-        ${quoteIdentifier(DOCUMENT_PAYLOAD_COLUMN)} TEXT NOT NULL
+        ${quoteIdentifier(DOCUMENT_ROW_DATA_COLUMN)} TEXT NOT NULL
       ) STRICT`,
     );
   }
@@ -538,17 +538,17 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
       );
     }
     const updateRow = this.database.query(
-      `UPDATE ${quoteIdentifier(definition.table)} SET ${quoteIdentifier(DOCUMENT_PAYLOAD_COLUMN)} = ? WHERE "id" = ?`,
+      `UPDATE ${quoteIdentifier(definition.table)} SET ${quoteIdentifier(DOCUMENT_ROW_DATA_COLUMN)} = ? WHERE "id" = ?`,
     );
     this.database.transaction(() => {
       const now = Date.now();
       const context: KindMigrationContext = { now };
       for (const row of this.database
         .query(
-          `SELECT "id", ${quoteIdentifier(DOCUMENT_PAYLOAD_COLUMN)} FROM ${quoteIdentifier(definition.table)} ORDER BY "id" ASC`,
+          `SELECT "id", ${quoteIdentifier(DOCUMENT_ROW_DATA_COLUMN)} AS "rowData" FROM ${quoteIdentifier(definition.table)} ORDER BY "id" ASC`,
         )
         .iterate() as IterableIterator<StoredRow>) {
-        let value = parsePayload(row.kindstore_payload);
+        let value = parseRowData(row.rowData);
         for (
           let currentVersion = version;
           currentVersion < definition.definition.version;
@@ -570,7 +570,7 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
             applyManagedTimestamps(
               definition,
               value,
-              parsePayload(row.kindstore_payload),
+              parseRowData(row.rowData),
               now,
               false,
             ),
@@ -595,17 +595,17 @@ class KindCollectionRuntime<T extends KindDefinition> implements KindCollection<
     this.database = database;
     this.definition = definition;
     this.getStatement = database.query(
-      `SELECT "id", ${quoteIdentifier(DOCUMENT_PAYLOAD_COLUMN)} FROM ${quoteIdentifier(definition.table)} WHERE "id" = ?`,
+      `SELECT "id", ${quoteIdentifier(DOCUMENT_ROW_DATA_COLUMN)} AS "rowData" FROM ${quoteIdentifier(definition.table)} WHERE "id" = ?`,
     );
     this.putStatement = database.query(
-      `INSERT INTO ${quoteIdentifier(definition.table)} ("id", ${quoteIdentifier(DOCUMENT_PAYLOAD_COLUMN)}) VALUES (?, ?)
-       ON CONFLICT("id") DO UPDATE SET ${quoteIdentifier(DOCUMENT_PAYLOAD_COLUMN)} = excluded.${quoteIdentifier(DOCUMENT_PAYLOAD_COLUMN)}`,
+      `INSERT INTO ${quoteIdentifier(definition.table)} ("id", ${quoteIdentifier(DOCUMENT_ROW_DATA_COLUMN)}) VALUES (?, ?)
+       ON CONFLICT("id") DO UPDATE SET ${quoteIdentifier(DOCUMENT_ROW_DATA_COLUMN)} = excluded.${quoteIdentifier(DOCUMENT_ROW_DATA_COLUMN)}`,
     );
     this.deleteStatement = database.query(
       `DELETE FROM ${quoteIdentifier(definition.table)} WHERE "id" = ?`,
     );
     this.updateStatement = database.query(
-      `UPDATE ${quoteIdentifier(definition.table)} SET ${quoteIdentifier(DOCUMENT_PAYLOAD_COLUMN)} = ? WHERE "id" = ?`,
+      `UPDATE ${quoteIdentifier(definition.table)} SET ${quoteIdentifier(DOCUMENT_ROW_DATA_COLUMN)} = ? WHERE "id" = ?`,
     );
   }
 
@@ -630,7 +630,7 @@ class KindCollectionRuntime<T extends KindDefinition> implements KindCollection<
       const parsed = applyManagedTimestamps(
         this.definition,
         stripDocumentId(value as Record<string, unknown>),
-        row ? parsePayload(row.kindstore_payload) : undefined,
+        row ? parseRowData(row.rowData) : undefined,
         Date.now(),
         !row,
       );
@@ -662,7 +662,7 @@ class KindCollectionRuntime<T extends KindDefinition> implements KindCollection<
       const parsed = applyManagedTimestamps(
         this.definition,
         stripDocumentId(nextValue),
-        parsePayload(row.kindstore_payload),
+        parseRowData(row.rowData),
         Date.now(),
         false,
       );
@@ -699,7 +699,7 @@ class KindCollectionRuntime<T extends KindDefinition> implements KindCollection<
       compileWhere(this.definition.columns, options.where),
       compilePageAfter(this.definition, orderEntries, options.after),
     );
-    const sql = `SELECT "id", ${quoteIdentifier(DOCUMENT_PAYLOAD_COLUMN)} FROM ${quoteIdentifier(this.definition.table)}${where.sql}${compileOrderBy(orderEntries, true)} LIMIT ?`;
+    const sql = `SELECT "id", ${quoteIdentifier(DOCUMENT_ROW_DATA_COLUMN)} AS "rowData" FROM ${quoteIdentifier(this.definition.table)}${where.sql}${compileOrderBy(orderEntries, true)} LIMIT ?`;
     const rows = this.database.query(sql).all(...where.values, options.limit + 1) as StoredRow[];
     const pageRows = rows.slice(0, options.limit);
     const items = pageRows.map((row) => this.parseRow(row));
@@ -725,11 +725,11 @@ class KindCollectionRuntime<T extends KindDefinition> implements KindCollection<
   }
 
   private parseRow(row: StoredRow) {
-    return this.attachId(row.id as KindId<T>, this.parsePayload(row));
+    return this.attachId(row.id as KindId<T>, this.parseRowData(row));
   }
 
-  private parsePayload(row: StoredRow) {
-    return this.definition.definition.schema.parse(parsePayload(row.kindstore_payload));
+  private parseRowData(row: StoredRow) {
+    return this.definition.definition.schema.parse(parseRowData(row.rowData));
   }
 
   private attachId(id: KindId<T>, value: Record<string, unknown>) {
@@ -745,7 +745,7 @@ class KindCollectionRuntime<T extends KindDefinition> implements KindCollection<
     const where = compileWhere(this.definition.columns, options.where);
     const orderBy = compileOrderBy(resolveOrderBy(this.definition.columns, options.orderBy));
     return {
-      sql: `SELECT "id", ${quoteIdentifier(DOCUMENT_PAYLOAD_COLUMN)} FROM ${quoteIdentifier(this.definition.table)}${where.sql}${orderBy}${options.limit == null ? "" : " LIMIT ?"}`,
+      sql: `SELECT "id", ${quoteIdentifier(DOCUMENT_ROW_DATA_COLUMN)} AS "rowData" FROM ${quoteIdentifier(this.definition.table)}${where.sql}${orderBy}${options.limit == null ? "" : " LIMIT ?"}`,
       values: options.limit == null ? where.values : [...where.values, options.limit],
     };
   }
@@ -779,7 +779,7 @@ class MetadataRuntime<T extends MetadataDefinitionMap> implements MetadataCollec
       throw new Error(`Metadata key "${key}" is not declared.`);
     }
     const row = this.getStatement.get(key) as { payload: string } | undefined;
-    return row ? schema.parse(parsePayload(row.payload)) : undefined;
+    return row ? schema.parse(parseRowData(row.payload)) : undefined;
   }
 
   set<K extends keyof T & string>(key: K, value: MetadataValue<T, K>) {
@@ -830,7 +830,7 @@ class InternalMetadataRuntime {
 
   get(key: string) {
     const row = this.getStatement.get(key) as { payload: string } | undefined;
-    return row ? parsePayload(row.payload) : undefined;
+    return row ? parseRowData(row.payload) : undefined;
   }
 
   getNumber(key: string) {
@@ -1070,7 +1070,7 @@ function normalizeKinds<TKinds extends KindRegistry>(kinds: TKinds) {
       throw new Error(`Kind key "${key}" collides with an existing table name.`);
     }
     const shape = value.schema.shape as Record<string, unknown>;
-    validateReservedPayloadFields(value.tag, shape);
+    validateReservedRowDataFields(value.tag, shape);
     if (value.createdAtField && value.createdAtField === value.updatedAtField) {
       throw new Error(
         `Kind "${value.tag}" cannot use "${value.createdAtField}" for both createdAt and updatedAt.`,
@@ -1142,9 +1142,12 @@ function assertTopLevelField(tag: string, shape: Record<string, unknown>, field:
   }
 }
 
-function validateReservedPayloadFields(tag: string, shape: Record<string, unknown>) {
+function validateReservedRowDataFields(tag: string, shape: Record<string, unknown>) {
   if ("id" in shape) {
     throw new Error(`Kind "${tag}" cannot declare reserved payload field "id".`);
+  }
+  if ("data" in shape) {
+    throw new Error(`Kind "${tag}" cannot declare reserved payload field "data".`);
   }
 }
 
@@ -1395,11 +1398,11 @@ function encodePageCursor<T extends KindDefinition>(
       order: orderBy.map(({ field, direction }) => [field, direction] as const),
       values,
       id: row.id,
-    } satisfies PageCursorPayload),
+    } satisfies PageCursorData),
   ).toString("base64url") as KindPageCursor<T>;
 }
 
-function decodePageCursor(cursor: string): PageCursorPayload {
+function decodePageCursor(cursor: string): PageCursorData {
   let parsed: unknown;
   try {
     parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8"));
@@ -1432,7 +1435,7 @@ function decodePageCursor(cursor: string): PageCursorPayload {
   return {
     version,
     tag,
-    order: order as PageCursorPayload["order"],
+    order: order as PageCursorData["order"],
     values,
     id,
   };
@@ -1512,6 +1515,6 @@ function applyManagedTimestamps<T extends KindDefinition>(
 }
 
 function stripDocumentId(value: Record<string, unknown>) {
-  const { id: _id, ...payload } = value;
-  return payload;
+  const { id: _id, ...rowData } = value;
+  return rowData;
 }

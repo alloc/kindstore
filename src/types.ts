@@ -20,28 +20,28 @@ export type KindDefinition = {
   version: number;
 };
 
-type KindPayloadValue<T extends KindDefinition> = z.output<T["schema"]>;
+type KindRowDataValue<T extends KindDefinition> = z.output<T["schema"]>;
 
 type KindManagedTimestampField<T extends KindDefinition> = Extract<
   T["createdAt"] | T["updatedAt"],
-  keyof KindPayloadValue<T> & string
+  keyof KindRowDataValue<T> & string
 >;
 
 export type KindValue<T extends KindDefinition> = {
   id: KindId<T>;
-} & Omit<KindPayloadValue<T>, "id">;
+} & Omit<KindRowDataValue<T>, "id">;
 
 export type KindInputValue<T extends KindDefinition> = Omit<
-  KindPayloadValue<T>,
-  KindManagedTimestampField<T> | "id"
+  KindRowDataValue<T>,
+  KindManagedTimestampField<T> | "id" | "data"
 > &
-  Partial<Pick<KindPayloadValue<T>, KindManagedTimestampField<T>>>;
+  Partial<Pick<KindRowDataValue<T>, KindManagedTimestampField<T>>>;
 
 export type KindId<T extends KindDefinition> = TaggedId<T["tag"]>;
 
 export type KindIndexedField<T extends KindDefinition> = Extract<
   T["indexed"],
-  keyof KindPayloadValue<T> & string
+  keyof KindRowDataValue<T> & string
 >;
 
 export type FilterOperators<T> = {
@@ -55,7 +55,7 @@ export type FilterOperators<T> = {
 export type WhereOperand<T> = Exclude<T, undefined> | null | FilterOperators<T>;
 
 export type KindWhere<T extends KindDefinition> = Partial<{
-  [K in KindIndexedField<T>]: WhereOperand<KindPayloadValue<T>[K]>;
+  [K in KindIndexedField<T>]: WhereOperand<KindRowDataValue<T>[K]>;
 }>;
 
 export type KindOrderBy<T extends KindDefinition> = Partial<

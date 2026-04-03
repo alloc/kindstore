@@ -42,7 +42,7 @@ Each collection provides:
 The durable contract is:
 
 - `id` is a store-owned document field, not an application-owned payload field
-- kind schemas may not declare a top-level `id` field
+- kind schemas may not declare top-level `id` or `data` fields
 - callers may rely on the tag prefix matching the collection
 - callers should otherwise treat the generated suffix as opaque
 - collection methods reject IDs that do not belong to the collection's tag

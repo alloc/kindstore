@@ -152,7 +152,7 @@ describe("kindstore", () => {
       ),
     ).toEqual([
       "id",
-      "kindstore_payload",
+      "data",
       "user_id",
       "status",
       "expires_at",
@@ -694,6 +694,20 @@ describe("kindstore", () => {
         },
       }),
     ).toThrow('Kind "usr" cannot declare reserved payload field "id".');
+    expect(() =>
+      kindstore({
+        filename,
+        schema: {
+          users: kind(
+            "usr",
+            z.object({
+              data: z.string(),
+              email: z.string(),
+            }),
+          ),
+        },
+      }),
+    ).toThrow('Kind "usr" cannot declare reserved payload field "data".');
   });
 
   test("defaults managed timestamp field names when omitted", () => {
@@ -757,7 +771,7 @@ describe("kindstore", () => {
       (narrowed.raw.query(`PRAGMA table_xinfo('sessions')`).all() as { name: string }[]).map(
         (column) => column.name,
       ),
-    ).toEqual(["id", "kindstore_payload", "user_id", "status"]);
+    ).toEqual(["id", "data", "user_id", "status"]);
     expect(
       (
         narrowed.raw
@@ -796,7 +810,7 @@ describe("kindstore", () => {
       (db.raw.query(`PRAGMA table_xinfo('messages')`).all() as { name: string }[]).map(
         (column) => column.name,
       ),
-    ).toEqual(["id", "kindstore_payload", "payload", "status"]);
+    ).toEqual(["id", "data", "payload", "status"]);
 
     db.close();
   });
