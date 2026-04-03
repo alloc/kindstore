@@ -157,9 +157,9 @@ type KindStoreSurface<TKinds extends KindRegistry, TMetadata extends MetadataDef
     : never;
 };
 
-export type PublicKindCollection<T extends KindDefinitionBag> = KindCollectionSurface<T>;
-export type PublicMetadataCollection<T extends MetadataDefinitionMap> = MetadataSurface<T>;
-export type PublicKindstore<
+export type KindCollection<T extends KindDefinitionBag> = KindCollectionSurface<T>;
+export type MetadataCollection<T extends MetadataDefinitionMap> = MetadataSurface<T>;
+export type Kindstore<
   TKinds extends KindRegistry,
   TMetadata extends MetadataDefinitionMap,
 > = KindStoreSurface<TKinds, TMetadata>;
@@ -178,7 +178,7 @@ export function createStore<TKinds extends KindRegistry, TMetadata extends Metad
       metadataDefinitions,
       normalizeSchemaPlan(schemaDefinition),
     );
-    return runtime.publicStore as PublicKindstore<TKinds, TMetadata>;
+    return runtime.publicStore as Kindstore<TKinds, TMetadata>;
   } catch (error) {
     database.close();
     throw error;
@@ -208,12 +208,12 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
     this.bootstrap();
     this.metadata = new MetadataRuntime(database, metadataDefinitions);
     this.publicStore.raw = database;
-    this.publicStore.metadata = this.metadata as PublicMetadataCollection<TMetadata>;
+    this.publicStore.metadata = this.metadata as MetadataCollection<TMetadata>;
     for (const [key, definition] of kinds) {
       this.publicStore[key] = new KindCollectionRuntime(
         database,
         definition,
-      ) as PublicKindCollection<any>;
+      ) as KindCollection<any>;
     }
   }
 

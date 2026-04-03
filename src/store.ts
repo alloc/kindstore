@@ -2,6 +2,7 @@ import type { z } from "zod";
 
 import type { KindDefinition } from "./kind";
 import { createStore } from "./runtime";
+import type { Kindstore } from "./runtime";
 import type {
   ConnectionConfig,
   KindDefinitionBag,
@@ -9,7 +10,6 @@ import type {
   MetadataDefinitionMap,
   SchemaDefinition,
 } from "./types";
-import type { PublicKindCollection, PublicKindstore, PublicMetadataCollection } from "./runtime";
 
 type AnyStoreInput = {
   connection: ConnectionConfig;
@@ -30,15 +30,6 @@ type InferMetadata<TInput extends AnyStoreInput> = TInput extends {
 }
   ? TMetadata
   : {};
-
-export type KindCollection<T extends KindDefinitionBag> = PublicKindCollection<T>;
-
-export type MetadataCollection<T extends MetadataDefinitionMap> = PublicMetadataCollection<T>;
-
-export type Kindstore<
-  TKinds extends KindRegistry,
-  TMetadata extends MetadataDefinitionMap = {},
-> = PublicKindstore<TKinds, TMetadata>;
 
 export function kindstore<const TInput extends AnyStoreInput>(input: TInput) {
   const { connection, metadata, schema, ...rest } = input;
