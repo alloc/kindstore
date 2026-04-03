@@ -36,11 +36,9 @@ import {
   snakeCase,
 } from "./util";
 
-const KINDSTORE_FORMAT_VERSION = 2;
+const KINDSTORE_FORMAT_VERSION = 1;
 const INTERNAL_TABLE = "__kindstore_internal";
 const APP_METADATA_TABLE = "__kindstore_app_metadata";
-const LEGACY_KIND_VERSIONS_TABLE = "__kindstore_kind_versions";
-const LEGACY_APP_METADATA_TABLE = "__kindstore_metadata";
 const STORE_FORMAT_VERSION_KEY = "store_format_version";
 const KIND_VERSIONS_KEY = "kind_versions";
 const SCHEMA_SNAPSHOT_KEY = "schema_snapshot";
@@ -271,63 +269,9 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
         `Store format version ${version} is newer than supported version ${KINDSTORE_FORMAT_VERSION}.`,
       );
     }
-    if (version < KINDSTORE_FORMAT_VERSION) {
-      this.migrateStoreFormat(version);
-      this.internal.set(STORE_FORMAT_VERSION_KEY, KINDSTORE_FORMAT_VERSION);
-    }
-  }
-
-  private migrateStoreFormat(version: number) {
-    for (
-      let currentVersion = version;
-      currentVersion < KINDSTORE_FORMAT_VERSION;
-      currentVersion++
-    ) {
-      switch (currentVersion) {
-        case 1:
-          this.migrateStoreFormat1To2();
-          break;
-        default:
-          throw new Error(
-            `Store format version ${currentVersion} cannot be upgraded to ${KINDSTORE_FORMAT_VERSION}.`,
-          );
-      }
-    }
-  }
-
-  private migrateStoreFormat1To2() {
-    const tables = new Set<string>();
-    const snapshot = this.internal.getSchemaSnapshot();
-    for (const kind of Object.values(snapshot?.kinds ?? {})) {
-      tables.add(kind.table);
-    }
-    for (const definition of this.kinds.values()) {
-      tables.add(definition.table);
-    }
-    for (const table of tables) {
-      if (!this.hasTable(table)) {
-        continue;
-      }
-      const columns = new Set(
-        (
-          this.database.query(`PRAGMA table_xinfo(${quoteString(table)})`).all() as {
-            name: string;
-          }[]
-        ).map((column) => column.name),
-      );
-      if (columns.has("created_at")) {
-        this.database.run(`ALTER TABLE ${quoteIdentifier(table)} DROP COLUMN "created_at"`);
-      }
-      if (columns.has("updated_at")) {
-        this.database.run(`ALTER TABLE ${quoteIdentifier(table)} DROP COLUMN "updated_at"`);
-      }
-    }
   }
 
   private hasExistingStoreArtifacts() {
-    if (this.hasTable(LEGACY_KIND_VERSIONS_TABLE) || this.hasTable(LEGACY_APP_METADATA_TABLE)) {
-      return true;
-    }
     for (const definition of this.kinds.values()) {
       if (this.hasTable(definition.table)) {
         return true;
@@ -944,6 +888,11 @@ class InternalMetadataRuntime {
       !isRecord(snapshot.kinds)
     ) {
       throw new Error(`Internal metadata key "${SCHEMA_SNAPSHOT_KEY}" is malformed.`);
+    }
+    if (snapshot.kindstoreVersion !== KINDSTORE_FORMAT_VERSION) {
+      throw new Error(
+        `Internal metadata key "${SCHEMA_SNAPSHOT_KEY}" references unsupported store format version "${snapshot.kindstoreVersion}".`,
+      );
     }
     for (const [kindKey, kind] of Object.entries(snapshot.kinds)) {
       if (

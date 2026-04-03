@@ -1,4 +1,3 @@
-import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 
@@ -163,7 +162,7 @@ describe("kindstore", () => {
       db.raw
         .query(`SELECT "payload" FROM "__kindstore_internal" WHERE "key" = 'store_format_version'`)
         .get(),
-    ).toEqual({ payload: "2" });
+    ).toEqual({ payload: "1" });
     expect(
       db.raw
         .query(`SELECT "payload" FROM "__kindstore_internal" WHERE "key" = 'kind_versions'`)
@@ -174,7 +173,7 @@ describe("kindstore", () => {
         .query(`SELECT "payload" FROM "__kindstore_internal" WHERE "key" = 'schema_snapshot'`)
         .get(),
     ).toEqual({
-      payload: expect.stringContaining('"kindstoreVersion":2'),
+      payload: expect.stringContaining('"kindstoreVersion":1'),
     });
 
     const mirrored = kindstore({
@@ -208,7 +207,7 @@ describe("kindstore", () => {
       mirrored.raw
         .query(`SELECT "payload" FROM "__kindstore_internal" WHERE "key" = 'store_format_version'`)
         .get(),
-    ).toEqual({ payload: "2" });
+    ).toEqual({ payload: "1" });
     mirrored.close();
     db.close();
   });
@@ -536,7 +535,7 @@ describe("kindstore", () => {
       migrated.raw
         .query(`SELECT "payload" FROM "__kindstore_internal" WHERE "key" = 'store_format_version'`)
         .get(),
-    ).toEqual({ payload: "2" });
+    ).toEqual({ payload: "1" });
     migrated.close();
     initial.close();
   });
@@ -657,71 +656,6 @@ describe("kindstore", () => {
     expect(session.updatedAt).toEqual(expect.any(Number));
     expect(session.updatedAt).toBeGreaterThanOrEqual(session.createdAt);
     db.close();
-  });
-
-  test("upgrades v1 stores away from hidden kind row timestamps", () => {
-    const filename = `file:kindstore-format-upgrade-${crypto.randomUUID()}?mode=memory&cache=shared`;
-    const raw = new Database(filename);
-    raw.run(
-      `CREATE TABLE "__kindstore_internal" (
-        "key" TEXT PRIMARY KEY NOT NULL,
-        "payload" TEXT NOT NULL,
-        "updated_at" INTEGER NOT NULL
-      ) STRICT`,
-    );
-    raw.run(
-      `CREATE TABLE "sessions" (
-        "id" TEXT PRIMARY KEY NOT NULL,
-        "payload" TEXT NOT NULL,
-        "created_at" INTEGER NOT NULL,
-        "updated_at" INTEGER NOT NULL
-      ) STRICT`,
-    );
-    raw
-      .query(`INSERT INTO "__kindstore_internal" ("key", "payload", "updated_at") VALUES (?, ?, ?)`)
-      .run("store_format_version", "1", 1);
-    raw
-      .query(`INSERT INTO "__kindstore_internal" ("key", "payload", "updated_at") VALUES (?, ?, ?)`)
-      .run("kind_versions", '{"sessions":1}', 1);
-    raw
-      .query(`INSERT INTO "__kindstore_internal" ("key", "payload", "updated_at") VALUES (?, ?, ?)`)
-      .run(
-        "schema_snapshot",
-        '{"kindstoreVersion":1,"kinds":{"sessions":{"tag":"ses","table":"sessions","version":1,"columns":{},"indexes":{}}}}',
-        1,
-      );
-    raw
-      .query(
-        `INSERT INTO "sessions" ("id", "payload", "created_at", "updated_at") VALUES (?, ?, ?, ?)`,
-      )
-      .run("ses_legacy", '{"userId":"usr_1","status":"active"}', 10, 20);
-
-    const Session = z.object({
-      userId: z.string(),
-      status: z.enum(["active", "revoked", "expired"]),
-    });
-    const db = kindstore({
-      filename,
-      schema: {
-        sessions: kind("ses", Session).index("userId").index("status"),
-      },
-    });
-    expect(db.sessions.get("ses_legacy" as never)).toEqual({
-      userId: "usr_1",
-      status: "active",
-    });
-    expect(
-      (db.raw.query(`PRAGMA table_xinfo('sessions')`).all() as { name: string }[]).map(
-        (column) => column.name,
-      ),
-    ).toEqual(["id", "payload", "user_id", "status"]);
-    expect(
-      db.raw
-        .query(`SELECT "payload" FROM "__kindstore_internal" WHERE "key" = 'store_format_version'`)
-        .get(),
-    ).toEqual({ payload: "2" });
-    db.close();
-    raw.close();
   });
 
   test("reconciles stale derived indexes and generated columns from the previous snapshot", () => {
