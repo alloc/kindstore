@@ -10,7 +10,8 @@ Requires Bun at runtime because kindstore uses `bun:sqlite`.
 bun add kindstore zod
 ```
 
-If you want the companion skill in Codex/Skills:
+The [skills.sh](https://skills.sh/) command line tool makes it easy to teach your
+favorite coding agent how to use Kindstore:
 
 ```sh
 npx skills add alloc/kindstore
