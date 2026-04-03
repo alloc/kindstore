@@ -23,35 +23,45 @@ export type KindDefinition = {
   updatedAtField: string;
 };
 
-export type KindPropertyKey<T extends KindDefinition> = keyof z.input<T["schema"]> & string;
+type KindLike = KindDefinition | KindBuilder<any>;
 
-export type KindManagedCreatedAt<T extends KindDefinition> = Extract<
-  T["createdAtField"],
+type ResolveKindDefinition<T extends KindLike> = T extends KindBuilder<infer B extends KindDefinition>
+  ? B
+  : T;
+
+export type KindPropertyKey<T extends KindLike> =
+  keyof z.input<ResolveKindDefinition<T>["schema"]> & string;
+
+export type KindManagedCreatedAt<T extends KindLike> = Extract<
+  ResolveKindDefinition<T>["createdAtField"],
   KindPropertyKey<T>
 >;
 
-export type KindManagedUpdatedAt<T extends KindDefinition> = Extract<
-  T["updatedAtField"],
+export type KindManagedUpdatedAt<T extends KindLike> = Extract<
+  ResolveKindDefinition<T>["updatedAtField"],
   KindPropertyKey<T>
 >;
 
-type KindManagedTimestampField<T extends KindDefinition> =
+type KindManagedTimestampField<T extends KindLike> =
   | KindManagedCreatedAt<T>
   | KindManagedUpdatedAt<T>;
 
-export type KindOutput<T extends KindDefinition> = {
+export type KindOutput<T extends KindLike> = {
   id: KindId<T>;
-} & Omit<z.output<T["schema"]>, "id">;
+} & Omit<z.output<ResolveKindDefinition<T>["schema"]>, "id">;
 
-export type KindInput<T extends KindDefinition> = Omit<
-  z.input<T["schema"]>,
+export type KindInput<T extends KindLike> = Omit<
+  z.input<ResolveKindDefinition<T>["schema"]>,
   KindManagedTimestampField<T> | "id" | "data"
 > &
-  Partial<Pick<z.input<T["schema"]>, KindManagedTimestampField<T>>>;
+  Partial<Pick<z.input<ResolveKindDefinition<T>["schema"]>, KindManagedTimestampField<T>>>;
 
-export type KindId<T extends KindDefinition> = TaggedId<T["tag"]>;
+export type KindId<T extends KindLike> = TaggedId<ResolveKindDefinition<T>["tag"]>;
 
-export type KindIndexedField<T extends KindDefinition> = Extract<T["indexed"], KindPropertyKey<T>>;
+export type KindIndexedField<T extends KindLike> = Extract<
+  ResolveKindDefinition<T>["indexed"],
+  KindPropertyKey<T>
+>;
 
 export type FilterOperators<T> = {
   in?: readonly Exclude<T, undefined>[];
@@ -63,32 +73,30 @@ export type FilterOperators<T> = {
 
 export type WhereOperand<T> = Exclude<T, undefined> | null | FilterOperators<T>;
 
-export type KindWhere<T extends KindDefinition> = Partial<{
-  [K in KindIndexedField<T>]: WhereOperand<z.output<T["schema"]>[K]>;
+export type KindWhere<T extends KindLike> = Partial<{
+  [K in KindIndexedField<T>]: WhereOperand<z.output<ResolveKindDefinition<T>["schema"]>[K]>;
 }>;
 
-export type KindOrderBy<T extends KindDefinition> = Partial<
-  Record<KindIndexedField<T>, IndexDirection>
->;
+export type KindOrderBy<T extends KindLike> = Partial<Record<KindIndexedField<T>, IndexDirection>>;
 
-export type FindManyOptions<T extends KindDefinition> = {
+export type FindManyOptions<T extends KindLike> = {
   where?: KindWhere<T>;
   orderBy?: KindOrderBy<T>;
   limit?: number;
 };
 
-export type KindPageCursor<T extends KindDefinition> = string & {
-  readonly __kindstorePageCursor?: T["tag"];
+export type KindPageCursor<T extends KindLike> = string & {
+  readonly __kindstorePageCursor?: ResolveKindDefinition<T>["tag"];
 };
 
-export type FindPageOptions<T extends KindDefinition> = {
+export type FindPageOptions<T extends KindLike> = {
   where?: KindWhere<T>;
   orderBy: KindOrderBy<T>;
   limit: number;
   after?: KindPageCursor<T>;
 };
 
-export type FindPageResult<T extends KindDefinition> = {
+export type FindPageResult<T extends KindLike> = {
   items: KindOutput<T>[];
   next?: KindPageCursor<T>;
 };

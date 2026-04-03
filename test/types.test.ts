@@ -47,6 +47,7 @@ test("type-level validation of core primitives", () => {
     createdAt: number;
     updatedAt: number;
   }>();
+  expectTypeOf<KindOutput<typeof userKind>>().toEqualTypeOf<KindOutput<UserBag>>();
 
   // KindInput allows omitting managed timestamps
   expectTypeOf<KindInput<UserBag>>().toMatchTypeOf<{
@@ -54,6 +55,7 @@ test("type-level validation of core primitives", () => {
     age: number;
     status?: "active" | "inactive" | undefined;
   }>();
+  expectTypeOf<KindInput<typeof userKind>>().toEqualTypeOf<KindInput<UserBag>>();
   // ... but allows providing them
   expectTypeOf<KindInput<UserBag>>().toMatchTypeOf<{
     name: string;
@@ -160,6 +162,18 @@ test("type-level validation of kindstore constructor", () => {
       }
     | undefined
   >();
+
+  type TaskInput = KindInput<typeof db.schema.tasks>;
+  type TaskOutput = KindOutput<typeof db.schema.tasks>;
+  expectTypeOf<TaskInput>().toEqualTypeOf<{
+    title: string;
+    status: "todo" | "doing" | "done";
+  }>();
+  expectTypeOf<TaskOutput>().toEqualTypeOf<{
+    id: `tsk_${string}`;
+    title: string;
+    status: "todo" | "doing" | "done";
+  }>();
 
   if (false) {
     // @ts-expect-error connection config object was removed

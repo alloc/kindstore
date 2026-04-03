@@ -3,6 +3,7 @@
 ## 0.3.4
 
 - Flattened downstream declaration output for `KindInput`, `KindOutput`, and related public types by using an internal erased `Omit` helper instead of exposing the built-in `Omit<...>` wrapper in inspected types.
+- Expanded `KindInput` and `KindOutput` to accept `KindBuilder` types directly, which preserves inference for inlined schema entries like `typeof schema.tasks`.
 
 ## 0.3.3
 

@@ -40,6 +40,20 @@ const db = kindstore({
 });
 ```
 
+When you need the inferred input or output shape for a declared kind, you can
+derive it directly from the builder instance:
+
+```ts
+import type { KindInput, KindOutput } from "kindstore";
+
+const schema = {
+  tasks: kind("tsk", Task).index("status"),
+};
+
+type TaskInput = KindInput<typeof schema.tasks>;
+type TaskOutput = KindOutput<typeof schema.tasks>;
+```
+
 Use this shape when you need:
 
 - stable tagged IDs like `tsk_...`
