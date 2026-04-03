@@ -150,9 +150,7 @@ export type Kindstore<TKinds extends KindRegistry, TMetadata extends MetadataDef
   batch<TResult>(callback: () => TResult): TResult;
   close(): void;
 } & {
-  [K in keyof TKinds]: TKinds[K] extends KindBuilder<infer TBag>
-    ? KindCollection<TBag>
-    : never;
+  [K in keyof TKinds]: TKinds[K] extends KindBuilder<infer TBag> ? KindCollection<TBag> : never;
 };
 
 export function createStore<TKinds extends KindRegistry, TMetadata extends MetadataDefinitionMap>(
@@ -437,9 +435,7 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
     );
   }
 
-  private ensureGeneratedColumns<T extends KindDefinition>(
-    definition: KindRuntimeDefinition<T>,
-  ) {
+  private ensureGeneratedColumns<T extends KindDefinition>(definition: KindRuntimeDefinition<T>) {
     const existing = new Set(
       (
         this.database.query(`PRAGMA table_xinfo(${quoteString(definition.table)})`).all() as {
@@ -543,9 +539,7 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
       const now = Date.now();
       const context: KindMigrationContext = { now };
       for (const row of this.database
-        .query(
-          `SELECT "id", "data" FROM ${quoteIdentifier(definition.table)} ORDER BY "id" ASC`,
-        )
+        .query(`SELECT "id", "data" FROM ${quoteIdentifier(definition.table)} ORDER BY "id" ASC`)
         .iterate() as IterableIterator<StoredRow>) {
         let value = parseRowData(row.data);
         for (
@@ -566,13 +560,7 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
         }
         updateRow.run(
           JSON.stringify(
-            applyManagedTimestamps(
-              definition,
-              value,
-              parseRowData(row.data),
-              now,
-              false,
-            ),
+            applyManagedTimestamps(definition, value, parseRowData(row.data), now, false),
           ),
           row.id,
         );

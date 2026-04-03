@@ -44,10 +44,7 @@ export class KindBuilder<T extends KindDefinition> {
     this.version = version;
   }
 
-  index<TKey extends KindPropertyKey<T>>(
-    field: TKey,
-    options: { type?: SqliteTypeHint } = {},
-  ) {
+  index<TKey extends KindPropertyKey<T>>(field: TKey, options: { type?: SqliteTypeHint } = {}) {
     const current = this.indexes.get(field);
     this.indexes.set(field, {
       field,
@@ -57,9 +54,7 @@ export class KindBuilder<T extends KindDefinition> {
     return this as unknown as KindBuilder<Omit<T, "indexed"> & { indexed: T["indexed"] | TKey }>;
   }
 
-  createdAt<
-    TKey extends KindPropertyKey<T> = DefaultManagedTimestampField<T, "createdAt">,
-  >(
+  createdAt<TKey extends KindPropertyKey<T> = DefaultManagedTimestampField<T, "createdAt">>(
     ...args: DefaultManagedTimestampField<T, "createdAt"> extends never
       ? [field: KindPropertyKey<T>]
       : [field?: TKey]
@@ -72,9 +67,7 @@ export class KindBuilder<T extends KindDefinition> {
     return this as unknown as KindBuilder<Omit<T, "createdAt"> & { createdAt: TKey }>;
   }
 
-  updatedAt<
-    TKey extends KindPropertyKey<T> = DefaultManagedTimestampField<T, "updatedAt">,
-  >(
+  updatedAt<TKey extends KindPropertyKey<T> = DefaultManagedTimestampField<T, "updatedAt">>(
     ...args: DefaultManagedTimestampField<T, "updatedAt"> extends never
       ? [field: KindPropertyKey<T>]
       : [field?: TKey]

@@ -89,7 +89,9 @@ Common examples:
 ## Use raw SQL deliberately
 
 ```ts
-const rows = db.raw.query(`SELECT count(*) AS count FROM "tasks" WHERE "status" = ?`).get("todo");
+const rows = db.raw
+  .query(`SELECT count(*) AS count FROM "tasks" WHERE "status" = ?`)
+  .get("todo");
 ```
 
 Raw access is useful when you need:

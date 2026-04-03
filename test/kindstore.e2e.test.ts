@@ -150,15 +150,7 @@ describe("kindstore", () => {
       (db.raw.query(`PRAGMA table_xinfo('sessions')`).all() as { name: string }[]).map(
         (column) => column.name,
       ),
-    ).toEqual([
-      "id",
-      "data",
-      "user_id",
-      "status",
-      "expires_at",
-      "updated_at",
-      "device_id",
-    ]);
+    ).toEqual(["id", "data", "user_id", "status", "expires_at", "updated_at", "device_id"]);
     expect(
       db.raw
         .query(`SELECT "name" FROM "sqlite_master" WHERE "type" = 'table' ORDER BY "name" ASC`)

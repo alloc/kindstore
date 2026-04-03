@@ -38,8 +38,7 @@ test("type-level validation of core primitives", () => {
     .createdAt("createdAt")
     .updatedAt("updatedAt");
 
-  type UserBag =
-    typeof userKind extends KindBuilder<infer B extends KindDefinition> ? B : never;
+  type UserBag = typeof userKind extends KindBuilder<infer B extends KindDefinition> ? B : never;
 
   // KindOutput is the typed document shape returned from collection APIs
   expectTypeOf<KindOutput<UserBag>>().toEqualTypeOf<{
@@ -108,9 +107,7 @@ test("type-level validation of core primitives", () => {
   }>();
 
   // PatchValue handles partial object updates
-  expectTypeOf<PatchValue<KindInput<UserBag>>>().toEqualTypeOf<
-    Partial<KindInput<UserBag>>
-  >();
+  expectTypeOf<PatchValue<KindInput<UserBag>>>().toEqualTypeOf<Partial<KindInput<UserBag>>>();
 
   // MetadataValue resolves ZodTypeAny mapping
   const metadataMap = {
