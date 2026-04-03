@@ -57,7 +57,9 @@ export class KindDefinition<T extends KindDefinitionBag> {
     return this as unknown as KindDefinition<Omit<T, "indexed"> & { indexed: T["indexed"] | TKey }>;
   }
 
-  createdAt<TKey extends keyof KindValue<T> & string = DefaultManagedTimestampField<T, "createdAt">>(
+  createdAt<
+    TKey extends keyof KindValue<T> & string = DefaultManagedTimestampField<T, "createdAt">,
+  >(
     ...args: DefaultManagedTimestampField<T, "createdAt"> extends never
       ? [field: keyof KindValue<T> & string]
       : [field?: TKey]
@@ -70,7 +72,9 @@ export class KindDefinition<T extends KindDefinitionBag> {
     return this as unknown as KindDefinition<Omit<T, "createdAt"> & { createdAt: TKey }>;
   }
 
-  updatedAt<TKey extends keyof KindValue<T> & string = DefaultManagedTimestampField<T, "updatedAt">>(
+  updatedAt<
+    TKey extends keyof KindValue<T> & string = DefaultManagedTimestampField<T, "updatedAt">,
+  >(
     ...args: DefaultManagedTimestampField<T, "updatedAt"> extends never
       ? [field: keyof KindValue<T> & string]
       : [field?: TKey]
