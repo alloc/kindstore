@@ -142,9 +142,9 @@ const latest = db.tasks.get(id);
 
 This is the core loop for most collections:
 
-- create fresh documents with `create()`
-- create IDs with `newId()`
-- write full documents with `put()`
+- create fresh documents with `create()` when kindstore should allocate the ID
+- create IDs with `newId()` when the caller needs to hold the ID before writing
+- write full documents with `put()` once you already know the target ID
 - make targeted changes with `update()`
 - read with `get()`
 
