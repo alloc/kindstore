@@ -21,8 +21,6 @@ const Task = z.object({
   title: z.string(),
   status: z.enum(["todo", "doing", "done"]),
   assigneeId: z.string().optional(),
-  createdAt: z.number().int(),
-  updatedAt: z.number().int(),
 });
 
 const db = kindstore({
@@ -48,6 +46,10 @@ Use this shape when you need:
 - typed payload validation with Zod
 - typed filtering on declared top-level fields only
 - deterministic ordering on indexed fields
+
+When a kind uses `.createdAt()` or `.updatedAt()`, kindstore adds integer
+timestamp fields to the schema if they are missing. If the field already exists
+in the Zod object, keep it as an integer timestamp field.
 
 ## Model for query shape, not payload size
 
@@ -261,7 +263,6 @@ Use `batch()` when those writes should succeed or fail together.
 const TaskV2 = z.object({
   title: z.string(),
   status: z.enum(["todo", "doing", "done"]),
-  updatedAt: z.number().int(),
 });
 
 const db = kindstore({
@@ -357,7 +358,6 @@ db.posts.findMany({
 db.posts.update(id, (current) => ({
   ...current,
   title: current.title.trim(),
-  updatedAt: Date.now(),
 }));
 ```
 
