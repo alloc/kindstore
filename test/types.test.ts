@@ -147,6 +147,15 @@ test("type-level validation of kindstore constructor", () => {
       status: "todo" | "doing" | "done";
     }>
   >();
+  expectTypeOf(
+    db.tasks.create({
+      title: "Ship docs",
+      status: "todo",
+    }),
+  ).toEqualTypeOf<{
+    title: string;
+    status: "todo" | "doing" | "done";
+  }>();
   expectTypeOf(db.metadata.get("preferences")).toEqualTypeOf<
     | {
         theme: "light" | "dark";

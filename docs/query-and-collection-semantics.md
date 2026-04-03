@@ -25,6 +25,7 @@ document-store operations without pretending to be a general ORM.
 Each collection provides:
 
 - `newId()`
+- `create(value)`
 - `get(id)`
 - `put(id, value)`
 - `update(id, updater)`
@@ -45,6 +46,14 @@ The durable contract is:
 - collection methods reject IDs that do not belong to the collection's tag
 
 ## Read semantics
+
+### `create(value)`
+
+`create(value)` generates a fresh tagged ID, validates the provided value, and
+stores it as a new document.
+
+It is equivalent to calling `put(newId(), value)` and returns the validated
+stored value.
 
 ### `get(id)`
 

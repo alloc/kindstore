@@ -212,6 +212,38 @@ describe("kindstore", () => {
     db.close();
   });
 
+  test("creates documents with generated IDs", () => {
+    const filename = `file:kindstore-create-${crypto.randomUUID()}?mode=memory&cache=shared`;
+    const Task = z.object({
+      title: z.string(),
+      status: z.enum(["todo", "doing", "done"]),
+    });
+    const db = kindstore({
+      filename,
+      schema: {
+        tasks: kind("tsk", Task).index("status"),
+      },
+    });
+
+    const created = db.tasks.create({
+      title: "Ship docs",
+      status: "todo",
+    });
+
+    expect(created).toEqual({
+      title: "Ship docs",
+      status: "todo",
+    });
+    expect(db.tasks.findMany()).toEqual([created]);
+    expect(
+      (db.raw.query(`SELECT "id" FROM "tasks"`).get() as { id: string } | null)?.id.startsWith(
+        "tsk_",
+      ),
+    ).toBe(true);
+
+    db.close();
+  });
+
   test("pages through indexed queries with a deterministic cursor", () => {
     const filename = `file:kindstore-pages-${crypto.randomUUID()}?mode=memory&cache=shared`;
     const Task = z.object({

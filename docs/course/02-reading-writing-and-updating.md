@@ -29,6 +29,19 @@ const db = kindstore({
 ## Create a document
 
 ```ts
+const task = db.tasks.create({
+  title: "Ship docs",
+  status: "todo",
+  updatedAt: Date.now(),
+});
+```
+
+`create()` allocates a fresh tagged ID, validates the value, and stores it.
+
+If you need to choose or hold the ID yourself, use `newId()` and `put()`
+directly:
+
+```ts
 const id = db.tasks.newId();
 
 db.tasks.put(id, {
@@ -37,9 +50,6 @@ db.tasks.put(id, {
   updatedAt: Date.now(),
 });
 ```
-
-`newId()` gives you a tagged ID for the collection. `put()` validates the value
-and stores it under that ID.
 
 ## Read a document
 
@@ -130,6 +140,7 @@ const latest = db.tasks.get(id);
 
 This is the core loop for most collections:
 
+- create fresh documents with `create()`
 - create IDs with `newId()`
 - write full documents with `put()`
 - make targeted changes with `update()`

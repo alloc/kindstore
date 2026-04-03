@@ -121,6 +121,7 @@ type PageCursorPayload = {
 
 export type KindCollection<T extends KindDefinition> = {
   newId(): KindId<T>;
+  create(value: KindInputValue<T>): KindValue<T>;
   get(id: KindId<T>): KindValue<T> | undefined;
   put(id: KindId<T>, value: KindInputValue<T>): KindValue<T>;
   delete(id: KindId<T>): boolean;
@@ -602,6 +603,10 @@ class KindCollectionRuntime<T extends KindDefinition> implements KindCollection<
 
   newId() {
     return `${this.definition.definition.tag}_${nextUlid()}` as KindId<T>;
+  }
+
+  create(value: KindInputValue<T>) {
+    return this.put(this.newId(), value);
   }
 
   get(id: KindId<T>) {

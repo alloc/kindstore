@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.0
+
+- Added `collection.create(value)` as a one-step helper that allocates a fresh tagged ID and persists the document.
+
 ## 0.2.1
 
 - Fixed store-format bookkeeping to keep the current internal format at version `1` and removed test coverage for a nonexistent `1 -> 2` format transition.
