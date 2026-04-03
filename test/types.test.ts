@@ -14,6 +14,7 @@ import type {
   MetadataValue,
   PatchValue,
   TaggedId,
+  WhereOperand,
 } from "../src/types";
 
 test("type-level validation of core primitives", () => {
@@ -33,7 +34,7 @@ test("type-level validation of core primitives", () => {
     .createdAt("createdAt")
     .updatedAt("updatedAt");
 
-  type UserBag = typeof userKind extends import("../src/kind").KindDefinition<infer B> ? B : never;
+  type UserBag = typeof userKind extends import("../src/kind").KindDefinition<infer B extends import("../src/types").KindDefinitionBag> ? B : never;
 
   // KindValue exactly matches the schema output
   expectTypeOf<KindValue<UserBag>>().toEqualTypeOf<{
@@ -67,10 +68,10 @@ test("type-level validation of core primitives", () => {
   expectTypeOf<"other_123">().not.toMatchTypeOf<KindId<UserBag>>();
 
   // KindWhere only allows fields that are indexed
-  expectTypeOf<KindWhere<UserBag>>().toMatchTypeOf<{
-    status?: "active" | "inactive" | null | import("../src/types").FilterOperators<"active" | "inactive">;
-    age?: number | null | import("../src/types").FilterOperators<number>;
-  }>();
+  expectTypeOf<KindWhere<UserBag>>().toEqualTypeOf<Partial<{
+    status: WhereOperand<"active" | "inactive" | undefined>;
+    age: WhereOperand<number>;
+  }>>();
   // @ts-expect-error - 'name' is not indexed
   expectTypeOf<{ name: string }>().toMatchTypeOf<KindWhere<UserBag>>();
 
@@ -102,7 +103,7 @@ test("type-level validation of core primitives", () => {
   expectTypeOf<PatchValue<KindInputValue<UserBag>>>().toEqualTypeOf<
     Partial<KindInputValue<UserBag>>
   >();
-  
+
   // MetadataValue resolves ZodTypeAny mapping
   const metadataMap = {
     version: z.number(),

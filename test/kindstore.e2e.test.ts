@@ -353,6 +353,7 @@ describe("kindstore", () => {
       literalBool: true,
       optionalText: "alpha",
       nullableScore: 10.5,
+      defaultPriority: 5,
       readonlyStatus: "open",
       catchEnabled: true,
     });
@@ -429,6 +430,7 @@ describe("kindstore", () => {
         items: kind(
           "itm",
           z.object({
+            // @ts-expect-error Zod correctly warns that you are piping string to number without parsing
             priority: z.string().pipe(z.number()),
           }),
         ).index("priority"),
