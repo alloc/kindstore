@@ -150,7 +150,15 @@ describe("kindstore", () => {
       (db.raw.query(`PRAGMA table_xinfo('sessions')`).all() as { name: string }[]).map(
         (column) => column.name,
       ),
-    ).toEqual(["id", "payload", "user_id", "status", "expires_at", "updated_at", "device_id"]);
+    ).toEqual([
+      "id",
+      "kindstore_payload",
+      "user_id",
+      "status",
+      "expires_at",
+      "updated_at",
+      "device_id",
+    ]);
     expect(
       db.raw
         .query(`SELECT "name" FROM "sqlite_master" WHERE "type" = 'table' ORDER BY "name" ASC`)
@@ -749,7 +757,7 @@ describe("kindstore", () => {
       (narrowed.raw.query(`PRAGMA table_xinfo('sessions')`).all() as { name: string }[]).map(
         (column) => column.name,
       ),
-    ).toEqual(["id", "payload", "user_id", "status"]);
+    ).toEqual(["id", "kindstore_payload", "user_id", "status"]);
     expect(
       (
         narrowed.raw
@@ -763,6 +771,34 @@ describe("kindstore", () => {
     ).toEqual(["idx_sessions_status", "idx_sessions_user_id"]);
     narrowed.close();
     initial.close();
+  });
+
+  test("allows indexed payload fields without storage-column remapping", () => {
+    const filename = `file:kindstore-payload-column-${crypto.randomUUID()}?mode=memory&cache=shared`;
+    const Message = z.object({
+      payload: z.string(),
+      status: z.enum(["queued", "sent"]),
+    });
+    const db = kindstore({
+      filename,
+      schema: {
+        messages: kind("msg", Message).index("payload").index("status"),
+      },
+    });
+
+    const message = db.messages.create({
+      payload: "hello",
+      status: "queued",
+    });
+
+    expect(db.messages.get(message.id)).toEqual(message);
+    expect(
+      (db.raw.query(`PRAGMA table_xinfo('messages')`).all() as { name: string }[]).map(
+        (column) => column.name,
+      ),
+    ).toEqual(["id", "kindstore_payload", "payload", "status"]);
+
+    db.close();
   });
 
   test("requires an explicit schema migration for a missing previous kind", () => {

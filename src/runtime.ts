@@ -43,13 +43,13 @@ const STORE_FORMAT_VERSION_KEY = "store_format_version";
 const KIND_VERSIONS_KEY = "kind_versions";
 const SCHEMA_SNAPSHOT_KEY = "schema_snapshot";
 const RESERVED_STORE_KEYS = new Set(["batch", "close", "connection", "metadata", "raw"]);
-const RESERVED_COLUMN_NAMES = new Set(["id", "payload"]);
+const DOCUMENT_PAYLOAD_COLUMN = "kindstore_payload";
 const nextUlid = monotonicFactory();
 const PAGE_CURSOR_VERSION = 1;
 
 type StoredRow = {
   id: string;
-  payload: string;
+  kindstore_payload: string;
 };
 
 type IndexColumn = {
@@ -433,7 +433,7 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
     this.database.run(
       `CREATE TABLE IF NOT EXISTS ${quoteIdentifier(definition.table)} (
         "id" TEXT PRIMARY KEY NOT NULL,
-        "payload" TEXT NOT NULL
+        ${quoteIdentifier(DOCUMENT_PAYLOAD_COLUMN)} TEXT NOT NULL
       ) STRICT`,
     );
   }
@@ -538,15 +538,17 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
       );
     }
     const updateRow = this.database.query(
-      `UPDATE ${quoteIdentifier(definition.table)} SET "payload" = ? WHERE "id" = ?`,
+      `UPDATE ${quoteIdentifier(definition.table)} SET ${quoteIdentifier(DOCUMENT_PAYLOAD_COLUMN)} = ? WHERE "id" = ?`,
     );
     this.database.transaction(() => {
       const now = Date.now();
       const context: KindMigrationContext = { now };
       for (const row of this.database
-        .query(`SELECT "id", "payload" FROM ${quoteIdentifier(definition.table)} ORDER BY "id" ASC`)
+        .query(
+          `SELECT "id", ${quoteIdentifier(DOCUMENT_PAYLOAD_COLUMN)} FROM ${quoteIdentifier(definition.table)} ORDER BY "id" ASC`,
+        )
         .iterate() as IterableIterator<StoredRow>) {
-        let value = parsePayload(row.payload);
+        let value = parsePayload(row.kindstore_payload);
         for (
           let currentVersion = version;
           currentVersion < definition.definition.version;
@@ -565,7 +567,13 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
         }
         updateRow.run(
           JSON.stringify(
-            applyManagedTimestamps(definition, value, parsePayload(row.payload), now, false),
+            applyManagedTimestamps(
+              definition,
+              value,
+              parsePayload(row.kindstore_payload),
+              now,
+              false,
+            ),
           ),
           row.id,
         );
@@ -587,17 +595,17 @@ class KindCollectionRuntime<T extends KindDefinition> implements KindCollection<
     this.database = database;
     this.definition = definition;
     this.getStatement = database.query(
-      `SELECT "id", "payload" FROM ${quoteIdentifier(definition.table)} WHERE "id" = ?`,
+      `SELECT "id", ${quoteIdentifier(DOCUMENT_PAYLOAD_COLUMN)} FROM ${quoteIdentifier(definition.table)} WHERE "id" = ?`,
     );
     this.putStatement = database.query(
-      `INSERT INTO ${quoteIdentifier(definition.table)} ("id", "payload") VALUES (?, ?)
-       ON CONFLICT("id") DO UPDATE SET "payload" = excluded."payload"`,
+      `INSERT INTO ${quoteIdentifier(definition.table)} ("id", ${quoteIdentifier(DOCUMENT_PAYLOAD_COLUMN)}) VALUES (?, ?)
+       ON CONFLICT("id") DO UPDATE SET ${quoteIdentifier(DOCUMENT_PAYLOAD_COLUMN)} = excluded.${quoteIdentifier(DOCUMENT_PAYLOAD_COLUMN)}`,
     );
     this.deleteStatement = database.query(
       `DELETE FROM ${quoteIdentifier(definition.table)} WHERE "id" = ?`,
     );
     this.updateStatement = database.query(
-      `UPDATE ${quoteIdentifier(definition.table)} SET "payload" = ? WHERE "id" = ?`,
+      `UPDATE ${quoteIdentifier(definition.table)} SET ${quoteIdentifier(DOCUMENT_PAYLOAD_COLUMN)} = ? WHERE "id" = ?`,
     );
   }
 
@@ -622,7 +630,7 @@ class KindCollectionRuntime<T extends KindDefinition> implements KindCollection<
       const parsed = applyManagedTimestamps(
         this.definition,
         stripDocumentId(value as Record<string, unknown>),
-        row ? parsePayload(row.payload) : undefined,
+        row ? parsePayload(row.kindstore_payload) : undefined,
         Date.now(),
         !row,
       );
@@ -654,7 +662,7 @@ class KindCollectionRuntime<T extends KindDefinition> implements KindCollection<
       const parsed = applyManagedTimestamps(
         this.definition,
         stripDocumentId(nextValue),
-        parsePayload(row.payload),
+        parsePayload(row.kindstore_payload),
         Date.now(),
         false,
       );
@@ -691,7 +699,7 @@ class KindCollectionRuntime<T extends KindDefinition> implements KindCollection<
       compileWhere(this.definition.columns, options.where),
       compilePageAfter(this.definition, orderEntries, options.after),
     );
-    const sql = `SELECT "id", "payload" FROM ${quoteIdentifier(this.definition.table)}${where.sql}${compileOrderBy(orderEntries, true)} LIMIT ?`;
+    const sql = `SELECT "id", ${quoteIdentifier(DOCUMENT_PAYLOAD_COLUMN)} FROM ${quoteIdentifier(this.definition.table)}${where.sql}${compileOrderBy(orderEntries, true)} LIMIT ?`;
     const rows = this.database.query(sql).all(...where.values, options.limit + 1) as StoredRow[];
     const pageRows = rows.slice(0, options.limit);
     const items = pageRows.map((row) => this.parseRow(row));
@@ -721,7 +729,7 @@ class KindCollectionRuntime<T extends KindDefinition> implements KindCollection<
   }
 
   private parsePayload(row: StoredRow) {
-    return this.definition.definition.schema.parse(parsePayload(row.payload));
+    return this.definition.definition.schema.parse(parsePayload(row.kindstore_payload));
   }
 
   private attachId(id: KindId<T>, value: Record<string, unknown>) {
@@ -737,7 +745,7 @@ class KindCollectionRuntime<T extends KindDefinition> implements KindCollection<
     const where = compileWhere(this.definition.columns, options.where);
     const orderBy = compileOrderBy(resolveOrderBy(this.definition.columns, options.orderBy));
     return {
-      sql: `SELECT "id", "payload" FROM ${quoteIdentifier(this.definition.table)}${where.sql}${orderBy}${options.limit == null ? "" : " LIMIT ?"}`,
+      sql: `SELECT "id", ${quoteIdentifier(DOCUMENT_PAYLOAD_COLUMN)} FROM ${quoteIdentifier(this.definition.table)}${where.sql}${orderBy}${options.limit == null ? "" : " LIMIT ?"}`,
       values: options.limit == null ? where.values : [...where.values, options.limit],
     };
   }
@@ -1431,8 +1439,7 @@ function decodePageCursor(cursor: string): PageCursorPayload {
 }
 
 function columnName(field: string) {
-  const column = snakeCase(field);
-  return RESERVED_COLUMN_NAMES.has(column) ? `doc_${column}` : column;
+  return snakeCase(field);
 }
 
 function snapshotKind<T extends KindDefinition>(

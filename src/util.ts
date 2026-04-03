@@ -27,7 +27,7 @@ export function parsePayload(payload: string) {
 
 export function columnExpression(type: SqliteTypeHint, field: string) {
   const path = `$."${field.replaceAll('"', '""')}"`;
-  const extract = `json_extract("payload", '${path}')`;
+  const extract = `json_extract("kindstore_payload", '${path}')`;
   return type === "text" ? extract : `CAST(${extract} AS ${type.toUpperCase()})`;
 }
 
