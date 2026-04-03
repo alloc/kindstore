@@ -37,7 +37,7 @@ const db = kindstore({
       .index("authorId")
       .index("slug")
       .index("status")
-      .index("updatedAt", { type: "integer" }),
+      .index("updatedAt"),
   },
 });
 

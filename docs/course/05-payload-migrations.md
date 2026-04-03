@@ -46,7 +46,7 @@ const db = kindstore({
     tasks: kind("tsk", TaskV2)
       .updatedAt()
       .index("status")
-      .index("updatedAt", { type: "integer" })
+      .index("updatedAt")
       .migrate(2, {
         1: (value) => ({
           ...value,

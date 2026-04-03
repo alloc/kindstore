@@ -21,7 +21,7 @@ const Task = z.object({
 const db = kindstore({
   filename: ":memory:",
   schema: {
-    tasks: kind("tsk", Task).index("status").index("updatedAt", { type: "integer" }),
+    tasks: kind("tsk", Task).index("status").index("updatedAt"),
   },
 });
 ```

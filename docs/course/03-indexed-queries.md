@@ -23,7 +23,7 @@ const db = kindstore({
   schema: {
     tasks: kind("tsk", Task)
       .index("status")
-      .index("updatedAt", { type: "integer" })
+      .index("updatedAt")
       .index("assigneeId")
       .multi("status_updatedAt", {
         status: "asc",
@@ -127,7 +127,7 @@ For example, this declaration:
 ```ts
 kind("tsk", Task)
   .index("status")
-  .index("updatedAt", { type: "integer" })
+  .index("updatedAt")
   .multi("status_updatedAt", {
     status: "asc",
     updatedAt: "desc",

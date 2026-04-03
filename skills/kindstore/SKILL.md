@@ -33,7 +33,7 @@ const db = kindstore({
       .updatedAt()
       .index("status")
       .index("assigneeId")
-      .index("updatedAt", { type: "integer" })
+      .index("updatedAt")
       .multi("status_updatedAt", {
         status: "asc",
         updatedAt: "desc",
@@ -63,7 +63,7 @@ const Message = z.object({
 const Messages = kind("msg", Message)
   .index("threadId")
   .index("authorId")
-  .index("sentAt", { type: "integer" })
+  .index("sentAt")
   .multi("thread_sentAt", {
     threadId: "asc",
     sentAt: "desc",
@@ -260,7 +260,7 @@ const db = kindstore({
     tasks: kind("tsk", TaskV2)
       .updatedAt()
       .index("status")
-      .index("updatedAt", { type: "integer" })
+      .index("updatedAt")
       .migrate(2, {
         1: (value) => ({
           ...value,
@@ -356,7 +356,7 @@ kind("pst", Post)
   .updatedAt()
   .index("authorId")
   .index("status")
-  .index("updatedAt", { type: "integer" })
+  .index("updatedAt")
   .multi("author_status_updatedAt", {
     authorId: "asc",
     status: "asc",

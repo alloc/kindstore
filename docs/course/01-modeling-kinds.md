@@ -70,7 +70,7 @@ const TimestampedTask = z.object({
 const TimestampedTasks = kind("tsk", TimestampedTask)
   .createdAt()
   .updatedAt()
-  .index("updatedAt", { type: "integer" });
+  .index("updatedAt");
 ```
 
 Use this when `createdAt` and `updatedAt` are store-owned payload fields rather
@@ -86,7 +86,7 @@ One is about value assignment policy. The other is about query intent.
 ```ts
 const Tasks = kind("tsk", Task)
   .index("status")
-  .index("updatedAt", { type: "integer" })
+  .index("updatedAt")
   .index("assigneeId");
 ```
 
@@ -103,7 +103,7 @@ they might be useful later.
 ```ts
 const Tasks = kind("tsk", Task)
   .index("status")
-  .index("updatedAt", { type: "integer" })
+  .index("updatedAt")
   .index("assigneeId")
   .multi("status_updatedAt", {
     status: "asc",
@@ -133,7 +133,7 @@ const db = kindstore({
   schema: {
     tasks: kind("tsk", Task)
       .index("status")
-      .index("updatedAt", { type: "integer" })
+      .index("updatedAt")
       .index("assigneeId")
       .multi("status_updatedAt", {
         status: "asc",
@@ -151,9 +151,10 @@ storage identity used in document IDs.
 - Index only top-level schema fields, because the typed query API is built
   around declared top-level fields such as `status` or `updatedAt`, not nested
   document paths.
-- Use explicit SQLite type hints when the indexed field is numeric and you want
-  integer ordering or comparison semantics. For example, `.index("updatedAt",
-{ type: "integer" })` makes the intent clear for timestamp queries.
+- Let kindstore infer SQLite types from supported Zod schemas when it can. For
+  example, `z.number().int()` indexes as `integer`, so `.index("updatedAt")` is
+  enough for timestamp queries. Add an explicit SQLite type hint only when
+  inference cannot determine the storage type you want.
 - Keep tags stable even if the collection name in code changes later, because
   the code-level collection name can be renamed with structural migration while
   the tag remains part of persisted document identity.

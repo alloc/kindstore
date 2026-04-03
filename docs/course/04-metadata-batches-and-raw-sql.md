@@ -26,7 +26,7 @@ const db = kindstore({
   filename: ":memory:",
   metadata: { preferences: Preferences },
   schema: {
-    tasks: kind("tsk", Task).index("status").index("updatedAt", { type: "integer" }),
+    tasks: kind("tsk", Task).index("status").index("updatedAt"),
   },
 });
 ```
