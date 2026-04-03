@@ -23,8 +23,8 @@ describe("kindstore", () => {
       connection: { filename },
       metadata: { app: AppMetadata },
       sessions: kind("ses", Session)
-        .createdAt("createdAt")
-        .updatedAt("updatedAt")
+        .createdAt()
+        .updatedAt()
         .index("userId")
         .index("status")
         .index("expiresAt", { type: "integer" })
@@ -179,8 +179,8 @@ describe("kindstore", () => {
       connection: { filename },
       metadata: { app: AppMetadata },
       sessions: kind("ses", Session)
-        .createdAt("createdAt")
-        .updatedAt("updatedAt")
+        .createdAt()
+        .updatedAt()
         .index("userId")
         .index("status")
         .index("expiresAt", { type: "integer" })
@@ -469,7 +469,7 @@ describe("kindstore", () => {
     const migrated = kindstore({
       connection: { filename },
       tasks: kind("tsk", TaskV2)
-        .updatedAt("updatedAt")
+        .updatedAt()
         .index("status")
         .index("updatedAt", { type: "integer" })
         .migrate(2, {
@@ -590,6 +590,26 @@ describe("kindstore", () => {
         .createdAt("timestamp")
         .updatedAt("timestamp"),
     ).toThrow('cannot use "timestamp" for both createdAt and updatedAt');
+  });
+
+  test("defaults managed timestamp field names when omitted", () => {
+    const filename = `file:kindstore-default-timestamps-${crypto.randomUUID()}?mode=memory&cache=shared`;
+    const Session = z.object({
+      userId: z.string(),
+      createdAt: z.number().int(),
+      updatedAt: z.number().int(),
+    });
+    const db = kindstore({
+      connection: { filename },
+      sessions: kind("ses", Session).createdAt().updatedAt().index("userId"),
+    });
+    const session = db.sessions.put(db.sessions.newId(), {
+      userId: "usr_1",
+    });
+    expect(session.createdAt).toEqual(expect.any(Number));
+    expect(session.updatedAt).toEqual(expect.any(Number));
+    expect(session.updatedAt).toBeGreaterThanOrEqual(session.createdAt);
+    db.close();
   });
 
   test("upgrades v1 stores away from hidden kind row timestamps", () => {

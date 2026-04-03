@@ -32,7 +32,7 @@ const Post = z.object({
 const db = kindstore({
   connection: { filename: ":memory:" },
   posts: kind("pst", Post)
-    .updatedAt("updatedAt")
+    .updatedAt()
     .index("authorId")
     .index("slug")
     .index("status")

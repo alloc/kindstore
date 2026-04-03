@@ -12,6 +12,11 @@ type MultiIndexFields<T extends KindDefinitionBag> = {
   [K in keyof KindValue<T> & string]?: IndexDirection;
 };
 
+type DefaultManagedTimestampField<
+  T extends KindDefinitionBag,
+  TName extends "createdAt" | "updatedAt",
+> = Extract<TName, keyof KindValue<T> & string>;
+
 type IndexDefinition = {
   field: string;
   type?: SqliteTypeHint;
@@ -52,7 +57,12 @@ export class KindDefinition<T extends KindDefinitionBag> {
     return this as unknown as KindDefinition<Omit<T, "indexed"> & { indexed: T["indexed"] | TKey }>;
   }
 
-  createdAt<TKey extends keyof KindValue<T> & string>(field: TKey) {
+  createdAt<TKey extends keyof KindValue<T> & string = DefaultManagedTimestampField<T, "createdAt">>(
+    ...args: DefaultManagedTimestampField<T, "createdAt"> extends never
+      ? [field: keyof KindValue<T> & string]
+      : [field?: TKey]
+  ) {
+    const field = (args[0] ?? "createdAt") as TKey;
     if (field === this.updatedAtField) {
       throw new Error(`Kind "${this.tag}" cannot use "${field}" for both createdAt and updatedAt.`);
     }
@@ -60,7 +70,12 @@ export class KindDefinition<T extends KindDefinitionBag> {
     return this as unknown as KindDefinition<Omit<T, "createdAt"> & { createdAt: TKey }>;
   }
 
-  updatedAt<TKey extends keyof KindValue<T> & string>(field: TKey) {
+  updatedAt<TKey extends keyof KindValue<T> & string = DefaultManagedTimestampField<T, "updatedAt">>(
+    ...args: DefaultManagedTimestampField<T, "updatedAt"> extends never
+      ? [field: keyof KindValue<T> & string]
+      : [field?: TKey]
+  ) {
+    const field = (args[0] ?? "updatedAt") as TKey;
     if (field === this.createdAtField) {
       throw new Error(`Kind "${this.tag}" cannot use "${field}" for both createdAt and updatedAt.`);
     }
