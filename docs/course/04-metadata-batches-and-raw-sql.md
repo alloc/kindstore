@@ -23,9 +23,11 @@ const Preferences = z.object({
 });
 
 const db = kindstore({
-  connection: { filename: ":memory:" },
+  filename: ":memory:",
   metadata: { preferences: Preferences },
-  tasks: kind("tsk", Task).index("status").index("updatedAt", { type: "integer" }),
+  schema: {
+    tasks: kind("tsk", Task).index("status").index("updatedAt", { type: "integer" }),
+  },
 });
 ```
 

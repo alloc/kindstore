@@ -2,7 +2,7 @@ export { KindDefinition, kind } from "./kind";
 export { kindstore } from "./store";
 
 export type {
-  ConnectionConfig,
+  DatabaseOptions,
   FilterOperators,
   FindPageOptions,
   FindPageResult,

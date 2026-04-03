@@ -16,8 +16,10 @@ const TaskV1 = z.object({
 });
 
 const db = kindstore({
-  connection: { filename: ":memory:" },
-  tasks: kind("tsk", TaskV1),
+  filename: ":memory:",
+  schema: {
+    tasks: kind("tsk", TaskV1),
+  },
 });
 ```
 
@@ -39,17 +41,19 @@ You can declare the new version and its upgrade step on the kind:
 
 ```ts
 const db = kindstore({
-  connection: { filename: ":memory:" },
-  tasks: kind("tsk", TaskV2)
-    .updatedAt()
-    .index("status")
-    .index("updatedAt", { type: "integer" })
-    .migrate(2, {
-      1: (value) => ({
-        ...value,
-        status: "todo",
+  filename: ":memory:",
+  schema: {
+    tasks: kind("tsk", TaskV2)
+      .updatedAt()
+      .index("status")
+      .index("updatedAt", { type: "integer" })
+      .migrate(2, {
+        1: (value) => ({
+          ...value,
+          status: "todo",
+        }),
       }),
-    }),
+  },
 });
 ```
 

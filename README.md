@@ -30,13 +30,15 @@ const Post = z.object({
 });
 
 const db = kindstore({
-  connection: { filename: ":memory:" },
-  posts: kind("pst", Post)
-    .updatedAt()
-    .index("authorId")
-    .index("slug")
-    .index("status")
-    .index("updatedAt", { type: "integer" }),
+  filename: ":memory:",
+  schema: {
+    posts: kind("pst", Post)
+      .updatedAt()
+      .index("authorId")
+      .index("slug")
+      .index("status")
+      .index("updatedAt", { type: "integer" }),
+  },
 });
 
 const id = db.posts.newId();

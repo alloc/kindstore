@@ -20,17 +20,19 @@ describe("kindstore", () => {
       lastOpenedAt: z.number().int().optional(),
     });
     const db = kindstore({
-      connection: { filename },
+      filename,
       metadata: { app: AppMetadata },
-      sessions: kind("ses", Session)
-        .createdAt()
-        .updatedAt()
-        .index("userId")
-        .index("status")
-        .index("expiresAt", { type: "integer" })
-        .index("updatedAt", { type: "integer" })
-        .index("deviceId")
-        .multi("user_updatedAt", { userId: "asc", updatedAt: "desc" }),
+      schema: {
+        sessions: kind("ses", Session)
+          .createdAt()
+          .updatedAt()
+          .index("userId")
+          .index("status")
+          .index("expiresAt", { type: "integer" })
+          .index("updatedAt", { type: "integer" })
+          .index("deviceId")
+          .multi("user_updatedAt", { userId: "asc", updatedAt: "desc" }),
+      },
     });
     const now = Date.now();
     const activeId = db.sessions.newId();
@@ -176,17 +178,19 @@ describe("kindstore", () => {
     });
 
     const mirrored = kindstore({
-      connection: { filename },
+      filename,
       metadata: { app: AppMetadata },
-      sessions: kind("ses", Session)
-        .createdAt()
-        .updatedAt()
-        .index("userId")
-        .index("status")
-        .index("expiresAt", { type: "integer" })
-        .index("updatedAt", { type: "integer" })
-        .index("deviceId")
-        .multi("user_updatedAt", { userId: "asc", updatedAt: "desc" }),
+      schema: {
+        sessions: kind("ses", Session)
+          .createdAt()
+          .updatedAt()
+          .index("userId")
+          .index("status")
+          .index("expiresAt", { type: "integer" })
+          .index("updatedAt", { type: "integer" })
+          .index("deviceId")
+          .multi("user_updatedAt", { userId: "asc", updatedAt: "desc" }),
+      },
     });
     expect(mirrored.sessions.get(activeId)).toEqual({
       userId: "usr_1",
@@ -217,11 +221,13 @@ describe("kindstore", () => {
       title: z.string(),
     });
     const db = kindstore({
-      connection: { filename },
-      tasks: kind("tsk", Task)
-        .index("status")
-        .index("updatedAt", { type: "integer" })
-        .multi("status_updatedAt", { status: "asc", updatedAt: "desc" }),
+      filename,
+      schema: {
+        tasks: kind("tsk", Task)
+          .index("status")
+          .index("updatedAt", { type: "integer" })
+          .multi("status_updatedAt", { status: "asc", updatedAt: "desc" }),
+      },
     });
     for (const [title, updatedAt] of [
       ["Newest", 30],
@@ -263,8 +269,10 @@ describe("kindstore", () => {
       title: z.string(),
     });
     const db = kindstore({
-      connection: { filename },
-      tasks: kind("tsk", Task).index("status").index("updatedAt", { type: "integer" }),
+      filename,
+      schema: {
+        tasks: kind("tsk", Task).index("status").index("updatedAt", { type: "integer" }),
+      },
     });
     db.tasks.put(db.tasks.newId(), {
       status: "doing",
@@ -325,21 +333,23 @@ describe("kindstore", () => {
       catchEnabled: z.boolean().catch(false),
     });
     const db = kindstore({
-      connection: { filename },
-      items: kind("itm", Item)
-        .index("title")
-        .index("status")
-        .index("enabled")
-        .index("priority")
-        .index("score")
-        .index("literalText")
-        .index("literalInt")
-        .index("literalBool")
-        .index("optionalText")
-        .index("nullableScore")
-        .index("defaultPriority")
-        .index("readonlyStatus")
-        .index("catchEnabled"),
+      filename,
+      schema: {
+        items: kind("itm", Item)
+          .index("title")
+          .index("status")
+          .index("enabled")
+          .index("priority")
+          .index("score")
+          .index("literalText")
+          .index("literalInt")
+          .index("literalBool")
+          .index("optionalText")
+          .index("nullableScore")
+          .index("defaultPriority")
+          .index("readonlyStatus")
+          .index("catchEnabled"),
+      },
     });
 
     db.items.put(db.items.newId(), {
@@ -413,42 +423,57 @@ describe("kindstore", () => {
     const prefaultFilename = `file:kindstore-prefault-${crypto.randomUUID()}?mode=memory&cache=shared`;
     expect(() =>
       kindstore({
-        connection: { filename: prefaultFilename },
-        items: kind(
-          "itm",
-          z.object({
-            status: z.string().prefault("draft"),
-          }),
-        ).index("status"),
+        filename: prefaultFilename,
+        schema: {
+          items: kind(
+            "itm",
+            z.object({
+              status: z.string().prefault("draft"),
+            }),
+          ).index("status"),
+        },
       }),
     ).toThrow('Kind "itm" field "status" needs an explicit SQLite type hint.');
 
     const pipeFilename = `file:kindstore-pipe-${crypto.randomUUID()}?mode=memory&cache=shared`;
     expect(() =>
       kindstore({
-        connection: { filename: pipeFilename },
-        items: kind(
-          "itm",
-          z.object({
-            // @ts-expect-error Zod correctly warns that you are piping string to number without parsing
-            priority: z.string().pipe(z.number()),
-          }),
-        ).index("priority"),
+        filename: pipeFilename,
+        schema: {
+          items: kind(
+            "itm",
+            z.object({
+              // @ts-expect-error Zod correctly warns that you are piping string to number without parsing
+              priority: z.string().pipe(z.number()),
+            }),
+          ).index("priority"),
+        },
       }),
     ).toThrow('Kind "itm" field "priority" needs an explicit SQLite type hint.');
 
     const transformFilename = `file:kindstore-transform-${crypto.randomUUID()}?mode=memory&cache=shared`;
     expect(() =>
       kindstore({
-        connection: { filename: transformFilename },
-        items: kind(
-          "itm",
-          z.object({
-            priority: z.string().transform(Number),
-          }),
-        ).index("priority"),
+        filename: transformFilename,
+        schema: {
+          items: kind(
+            "itm",
+            z.object({
+              priority: z.string().transform(Number),
+            }),
+          ).index("priority"),
+        },
       }),
     ).toThrow('Kind "itm" field "priority" needs an explicit SQLite type hint.');
+  });
+
+  test("rejects empty schemas", () => {
+    expect(() =>
+      kindstore({
+        filename: ":memory:",
+        schema: {} as never,
+      }),
+    ).toThrow('kindstore() requires at least one declared kind in "schema".');
   });
 
   test("runs eager migrations before reads and indexed queries", () => {
@@ -457,8 +482,10 @@ describe("kindstore", () => {
       title: z.string(),
     });
     const initial = kindstore({
-      connection: { filename },
-      tasks: kind("tsk", TaskV1),
+      filename,
+      schema: {
+        tasks: kind("tsk", TaskV1),
+      },
     });
     const taskId = initial.tasks.newId();
     initial.tasks.put(taskId, { title: "Ship v1" });
@@ -469,17 +496,19 @@ describe("kindstore", () => {
       updatedAt: z.number().int(),
     });
     const migrated = kindstore({
-      connection: { filename },
-      tasks: kind("tsk", TaskV2)
-        .updatedAt()
-        .index("status")
-        .index("updatedAt", { type: "integer" })
-        .migrate(2, {
-          1: (value) => ({
-            ...value,
-            status: "open",
+      filename,
+      schema: {
+        tasks: kind("tsk", TaskV2)
+          .updatedAt()
+          .index("status")
+          .index("updatedAt", { type: "integer" })
+          .migrate(2, {
+            1: (value) => ({
+              ...value,
+              status: "open",
+            }),
           }),
-        }),
+      },
     });
     const task = migrated.tasks.get(taskId);
     expect(task?.title).toBe("Ship v1");
@@ -519,14 +548,18 @@ describe("kindstore", () => {
       status: z.enum(["active", "revoked", "expired"]),
     });
     const db = kindstore({
-      connection: { filename },
-      sessions: kind("ses", Session).index("userId").index("status"),
+      filename,
+      schema: {
+        sessions: kind("ses", Session).index("userId").index("status"),
+      },
     });
     db.raw.query(`DELETE FROM "__kindstore_internal" WHERE "key" = 'store_format_version'`).run();
     expect(() =>
       kindstore({
-        connection: { filename },
-        sessions: kind("ses", Session).index("userId").index("status"),
+        filename,
+        schema: {
+          sessions: kind("ses", Session).index("userId").index("status"),
+        },
       }),
     ).toThrow("missing the kindstore format version");
     db.close();
@@ -538,16 +571,20 @@ describe("kindstore", () => {
       userId: z.string(),
     });
     const db = kindstore({
-      connection: { filename },
-      sessions: kind("ses", Session).index("userId"),
+      filename,
+      schema: {
+        sessions: kind("ses", Session).index("userId"),
+      },
     });
     db.raw
       .query(`UPDATE "__kindstore_internal" SET "payload" = ? WHERE "key" = 'kind_versions'`)
       .run('"oops"');
     expect(() =>
       kindstore({
-        connection: { filename },
-        sessions: kind("ses", Session).index("userId"),
+        filename,
+        schema: {
+          sessions: kind("ses", Session).index("userId"),
+        },
       }),
     ).toThrow('Internal metadata key "kind_versions" is malformed');
     db.close();
@@ -559,16 +596,20 @@ describe("kindstore", () => {
       userId: z.string(),
     });
     const db = kindstore({
-      connection: { filename },
-      sessions: kind("ses", Session).index("userId"),
+      filename,
+      schema: {
+        sessions: kind("ses", Session).index("userId"),
+      },
     });
     db.raw
       .query(`UPDATE "__kindstore_internal" SET "payload" = ? WHERE "key" = 'schema_snapshot'`)
       .run('{"kindstoreVersion":1,"kinds":{"sessions":{"tag":"ses"}}}');
     expect(() =>
       kindstore({
-        connection: { filename },
-        sessions: kind("ses", Session).index("userId"),
+        filename,
+        schema: {
+          sessions: kind("ses", Session).index("userId"),
+        },
       }),
     ).toThrow('Internal metadata key "schema_snapshot" has an invalid kind entry');
     db.close();
@@ -578,13 +619,15 @@ describe("kindstore", () => {
     const filename = `file:kindstore-bad-timestamps-${crypto.randomUUID()}?mode=memory&cache=shared`;
     expect(() =>
       kindstore({
-        connection: { filename },
-        sessions: kind(
-          "ses",
-          z.object({
-            createdAt: z.string(),
-          }),
-        ).createdAt("createdAt"),
+        filename,
+        schema: {
+          sessions: kind(
+            "ses",
+            z.object({
+              createdAt: z.string(),
+            }),
+          ).createdAt("createdAt"),
+        },
       }),
     ).toThrow('createdAt field "createdAt" must be an integer');
     expect(() =>
@@ -602,8 +645,10 @@ describe("kindstore", () => {
       updatedAt: z.number().int(),
     });
     const db = kindstore({
-      connection: { filename },
-      sessions: kind("ses", Session).createdAt().updatedAt().index("userId"),
+      filename,
+      schema: {
+        sessions: kind("ses", Session).createdAt().updatedAt().index("userId"),
+      },
     });
     const session = db.sessions.put(db.sessions.newId(), {
       userId: "usr_1",
@@ -656,8 +701,10 @@ describe("kindstore", () => {
       status: z.enum(["active", "revoked", "expired"]),
     });
     const db = kindstore({
-      connection: { filename },
-      sessions: kind("ses", Session).index("userId").index("status"),
+      filename,
+      schema: {
+        sessions: kind("ses", Session).index("userId").index("status"),
+      },
     });
     expect(db.sessions.get("ses_legacy" as never)).toEqual({
       userId: "usr_1",
@@ -687,14 +734,16 @@ describe("kindstore", () => {
       deviceId: z.string().optional(),
     });
     const initial = kindstore({
-      connection: { filename },
-      sessions: kind("ses", Session)
-        .index("userId")
-        .index("status")
-        .index("expiresAt", { type: "integer" })
-        .index("updatedAt", { type: "integer" })
-        .index("deviceId")
-        .multi("user_updatedAt", { userId: "asc", updatedAt: "desc" }),
+      filename,
+      schema: {
+        sessions: kind("ses", Session)
+          .index("userId")
+          .index("status")
+          .index("expiresAt", { type: "integer" })
+          .index("updatedAt", { type: "integer" })
+          .index("deviceId")
+          .multi("user_updatedAt", { userId: "asc", updatedAt: "desc" }),
+      },
     });
     initial.sessions.put(initial.sessions.newId(), {
       userId: "usr_1",
@@ -705,8 +754,10 @@ describe("kindstore", () => {
     });
 
     const narrowed = kindstore({
-      connection: { filename },
-      sessions: kind("ses", Session).index("userId").index("status"),
+      filename,
+      schema: {
+        sessions: kind("ses", Session).index("userId").index("status"),
+      },
     });
     expect(
       (narrowed.raw.query(`PRAGMA table_xinfo('sessions')`).all() as { name: string }[]).map(
@@ -734,32 +785,40 @@ describe("kindstore", () => {
       userId: z.string(),
     });
     const initial = kindstore({
-      connection: { filename },
-      sessions: kind("ses", Session).index("userId"),
+      filename,
+      schema: {
+        sessions: kind("ses", Session).index("userId"),
+      },
     });
     expect(() =>
       kindstore({
-        connection: { filename },
-        authSessions: kind("ses", Session).index("userId"),
+        filename,
+        schema: {
+          authSessions: kind("ses", Session).index("userId"),
+        },
       }),
     ).toThrow('Previous kind "sessions" is missing');
     const reopened = kindstore({
-      connection: { filename },
-      sessions: kind("ses", Session).index("userId"),
+      filename,
+      schema: {
+        sessions: kind("ses", Session).index("userId"),
+      },
     });
     expect(reopened.sessions.findMany()).toEqual([]);
     reopened.close();
     initial.close();
   });
 
-  test("renames a previous kind when authorized by schema.migrate", () => {
+  test("renames a previous kind when authorized by migrate", () => {
     const filename = `file:kindstore-rename-${crypto.randomUUID()}?mode=memory&cache=shared`;
     const Session = z.object({
       userId: z.string(),
     });
     const initial = kindstore({
-      connection: { filename },
-      sessions: kind("ses", Session).index("userId"),
+      filename,
+      schema: {
+        sessions: kind("ses", Session).index("userId"),
+      },
     });
     const sessionId = initial.sessions.newId();
     initial.sessions.put(sessionId, {
@@ -767,13 +826,13 @@ describe("kindstore", () => {
     });
 
     const renamed = kindstore({
-      connection: { filename },
-      schema: {
-        migrate(m) {
-          m.rename("sessions", "authSessions");
-        },
+      filename,
+      migrate(m) {
+        m.rename("sessions", "authSessions");
       },
-      authSessions: kind("ses", Session).index("userId"),
+      schema: {
+        authSessions: kind("ses", Session).index("userId"),
+      },
     });
     expect(renamed.authSessions.get(sessionId as never)).toEqual({
       userId: "usr_1",
@@ -799,36 +858,42 @@ describe("kindstore", () => {
     });
     expect(() =>
       kindstore({
-        connection: { filename },
-        schema: {
-          migrate(m) {
-            m.rename("sessions", "sessions");
-          },
+        filename,
+        migrate(m) {
+          m.rename("sessions", "sessions");
         },
-        sessions: kind("ses", Session).index("userId"),
+        schema: {
+          sessions: kind("ses", Session).index("userId"),
+        },
       }),
     ).toThrow('rename from "sessions" to itself');
   });
 
-  test("drops a previous kind when authorized by schema.migrate", () => {
+  test("drops a previous kind when authorized by migrate", () => {
     const filename = `file:kindstore-drop-${crypto.randomUUID()}?mode=memory&cache=shared`;
     const Session = z.object({
       userId: z.string(),
     });
+    const User = z.object({
+      email: z.string(),
+    });
     const initial = kindstore({
-      connection: { filename },
-      sessions: kind("ses", Session).index("userId"),
+      filename,
+      schema: {
+        sessions: kind("ses", Session).index("userId"),
+      },
     });
     initial.sessions.put(initial.sessions.newId(), {
       userId: "usr_1",
     });
 
     const dropped = kindstore({
-      connection: { filename },
+      filename,
+      migrate(m) {
+        m.drop("sessions");
+      },
       schema: {
-        migrate(m) {
-          m.drop("sessions");
-        },
+        users: kind("usr", User).index("email"),
       },
     });
     expect(
@@ -839,20 +904,22 @@ describe("kindstore", () => {
     expect(
       dropped.raw
         .query(`SELECT "payload" FROM "__kindstore_internal" WHERE "key" = 'kind_versions'`)
-        .all(),
-    ).toEqual([]);
+        .get(),
+    ).toEqual({ payload: '{"users":1}' });
     dropped.close();
     initial.close();
   });
 
-  test("retags a kind when authorized by schema.migrate", () => {
+  test("retags a kind when authorized by migrate", () => {
     const filename = `file:kindstore-retag-${crypto.randomUUID()}?mode=memory&cache=shared`;
     const User = z.object({
       email: z.string(),
     });
     const initial = kindstore({
-      connection: { filename },
-      users: kind("usr", User),
+      filename,
+      schema: {
+        users: kind("usr", User),
+      },
     });
     const userId = initial.users.newId();
     initial.users.put(userId, {
@@ -860,13 +927,13 @@ describe("kindstore", () => {
     });
 
     const retagged = kindstore({
-      connection: { filename },
-      schema: {
-        migrate(m) {
-          m.retag("users", "usr");
-        },
+      filename,
+      migrate(m) {
+        m.retag("users", "usr");
       },
-      users: kind("per", User),
+      schema: {
+        users: kind("per", User),
+      },
     });
     const retaggedId = userId.replace("usr_", "per_");
     expect(retagged.users.get(retaggedId as never)).toEqual({
@@ -883,8 +950,10 @@ describe("kindstore", () => {
       userId: z.string(),
     });
     const initial = kindstore({
-      connection: { filename },
-      sessions: kind("ses", Session).index("userId"),
+      filename,
+      schema: {
+        sessions: kind("ses", Session).index("userId"),
+      },
     });
     const sessionId = initial.sessions.newId();
     initial.sessions.put(sessionId, {
@@ -892,13 +961,17 @@ describe("kindstore", () => {
     });
     expect(() =>
       kindstore({
-        connection: { filename },
-        authSessions: kind("ses", Session).index("userId"),
+        filename,
+        schema: {
+          authSessions: kind("ses", Session).index("userId"),
+        },
       }),
     ).toThrow();
     const reopened = kindstore({
-      connection: { filename },
-      sessions: kind("ses", Session).index("userId"),
+      filename,
+      schema: {
+        sessions: kind("ses", Session).index("userId"),
+      },
     });
     expect(reopened.sessions.get(sessionId)).toEqual({
       userId: "usr_1",
@@ -918,8 +991,10 @@ describe("kindstore", () => {
       title: z.string(),
     });
     const initial = kindstore({
-      connection: { filename },
-      tasks: kind("tsk", TaskV1),
+      filename,
+      schema: {
+        tasks: kind("tsk", TaskV1),
+      },
     });
     const taskId = initial.tasks.newId();
     initial.tasks.put(taskId, { title: "Ship v1" });
@@ -929,17 +1004,21 @@ describe("kindstore", () => {
     });
     expect(() =>
       kindstore({
-        connection: { filename },
-        tasks: kind("tsk", TaskV2).migrate(2, {
-          1: () => {
-            throw new Error("boom");
-          },
-        }),
+        filename,
+        schema: {
+          tasks: kind("tsk", TaskV2).migrate(2, {
+            1: () => {
+              throw new Error("boom");
+            },
+          }),
+        },
       }),
     ).toThrow("boom");
     const reopened = kindstore({
-      connection: { filename },
-      tasks: kind("tsk", TaskV1),
+      filename,
+      schema: {
+        tasks: kind("tsk", TaskV1),
+      },
     });
     expect(reopened.tasks.get(taskId)).toEqual({ title: "Ship v1" });
     expect(

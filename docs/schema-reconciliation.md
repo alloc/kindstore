@@ -64,16 +64,16 @@ configuration:
 
 ```ts
 const db = kindstore({
-  connection: { filename: ":memory:" },
-  schema: {
-    migrate(m) {
-      m.rename("legacySessions", "sessions");
-      m.drop("obsoleteCache");
-      m.retag("users", "usr");
-    },
+  filename: ":memory:",
+  migrate(m) {
+    m.rename("legacySessions", "sessions");
+    m.drop("obsoleteCache");
+    m.retag("users", "usr");
   },
-  sessions: kind("ses", Session),
-  users: kind("per", User),
+  schema: {
+    sessions: kind("ses", Session),
+    users: kind("per", User),
+  },
 });
 ```
 

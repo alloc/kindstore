@@ -1,4 +1,4 @@
-import type { Database } from "bun:sqlite";
+import type { DatabaseOptions } from "bun:sqlite";
 import type { z } from "zod";
 
 import type { KindDefinition } from "./kind";
@@ -103,13 +103,10 @@ export type SchemaDefinition = {
   migrate(planner: SchemaMigrationPlanner): void;
 };
 
+export type { DatabaseOptions };
+
 export type MetadataValue<T extends MetadataDefinitionMap, K extends keyof T & string> = z.output<
   T[K]
 >;
 
 export type KindRegistry = Record<string, KindDefinition<any>>;
-
-export type ConnectionConfig = {
-  filename: string;
-  options?: ConstructorParameters<typeof Database>[1];
-};

@@ -18,7 +18,7 @@ Structural migration handles changes such as:
 These changes affect row ownership or document identity, so kindstore requires
 explicit intent instead of guessing.
 
-## Use the top-level `schema.migrate(...)` planner
+## Use the top-level `migrate(...)` planner
 
 ```ts
 import { z } from "zod";
@@ -30,15 +30,15 @@ const WorkItem = z.object({
 });
 
 const db = kindstore({
-  connection: { filename: ":memory:" },
-  schema: {
-    migrate(m) {
-      m.rename("tasks", "workItems");
-      m.retag("workItems", "tsk");
-      m.drop("drafts");
-    },
+  filename: ":memory:",
+  migrate(m) {
+    m.rename("tasks", "workItems");
+    m.retag("workItems", "tsk");
+    m.drop("drafts");
   },
-  workItems: kind("wrk", WorkItem).index("status"),
+  schema: {
+    workItems: kind("wrk", WorkItem).index("status"),
+  },
 });
 ```
 

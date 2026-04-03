@@ -19,15 +19,17 @@ const Task = z.object({
 });
 
 const db = kindstore({
-  connection: { filename: ":memory:" },
-  tasks: kind("tsk", Task)
-    .index("status")
-    .index("updatedAt", { type: "integer" })
-    .index("assigneeId")
-    .multi("status_updatedAt", {
-      status: "asc",
-      updatedAt: "desc",
-    }),
+  filename: ":memory:",
+  schema: {
+    tasks: kind("tsk", Task)
+      .index("status")
+      .index("updatedAt", { type: "integer" })
+      .index("assigneeId")
+      .multi("status_updatedAt", {
+        status: "asc",
+        updatedAt: "desc",
+      }),
+  },
 });
 ```
 

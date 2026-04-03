@@ -4,41 +4,50 @@ import type { KindDefinition } from "./kind";
 import { createStore } from "./runtime";
 import type { Kindstore } from "./runtime";
 import type {
-  ConnectionConfig,
+  DatabaseOptions,
   KindDefinitionBag,
   KindRegistry,
   MetadataDefinitionMap,
   SchemaDefinition,
 } from "./types";
 
-type AnyStoreInput = {
-  connection: ConnectionConfig;
-  metadata?: MetadataDefinitionMap;
-  schema?: SchemaDefinition;
-} & Record<string, unknown>;
-
-type InferKinds<TInput extends AnyStoreInput> = {
-  [K in keyof TInput as K extends "connection" | "metadata" | "schema"
-    ? never
-    : TInput[K] extends KindDefinition<any>
-      ? K
-      : never]: Extract<TInput[K], KindDefinition<any>>;
+type AnyStoreInput<
+  TKinds extends KindRegistry = KindRegistry,
+  TMetadata extends MetadataDefinitionMap = MetadataDefinitionMap,
+> = {
+  filename: string;
+  databaseOptions?: DatabaseOptions;
+  metadata?: TMetadata;
+  migrate?: SchemaDefinition["migrate"];
+  schema: keyof TKinds extends never ? never : TKinds;
 };
 
-type InferMetadata<TInput extends AnyStoreInput> = TInput extends {
-  metadata: infer TMetadata extends MetadataDefinitionMap;
-}
-  ? TMetadata
-  : {};
+type Exact<TShape, TObject extends TShape> = TShape &
+  Record<Exclude<keyof TObject, keyof TShape>, never>;
 
-export function kindstore<const TInput extends AnyStoreInput>(input: TInput) {
-  const { connection, metadata, schema, ...rest } = input;
+type InferKinds<TKinds extends KindRegistry> = {
+  [K in keyof TKinds as TKinds[K] extends KindDefinition<any> ? K : never]: Extract<
+    TKinds[K],
+    KindDefinition<any>
+  >;
+};
+
+export function kindstore<
+  const TKinds extends KindRegistry,
+  const TMetadata extends MetadataDefinitionMap = {},
+  const TInput extends AnyStoreInput<TKinds, TMetadata> = AnyStoreInput<TKinds, TMetadata>,
+>(input: Exact<AnyStoreInput<TKinds, TMetadata>, TInput>) {
+  const { filename, databaseOptions, metadata, migrate, schema } = input;
+  if (Object.keys(schema).length === 0) {
+    throw new Error('kindstore() requires at least one declared kind in "schema".');
+  }
   return createStore(
-    connection,
-    rest as unknown as InferKinds<TInput>,
-    (metadata ?? {}) as InferMetadata<TInput>,
-    schema,
-  ) as Kindstore<InferKinds<TInput>, InferMetadata<TInput>>;
+    filename,
+    databaseOptions,
+    schema as InferKinds<TKinds>,
+    (metadata ?? {}) as TMetadata,
+    migrate ? { migrate } : undefined,
+  ) as Kindstore<InferKinds<TKinds>, TMetadata>;
 }
 
 export type MetadataSchemas = Record<string, z.ZodTypeAny>;

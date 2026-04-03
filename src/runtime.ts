@@ -3,7 +3,7 @@ import { monotonicFactory } from "ulid";
 
 import { KindDefinition } from "./kind";
 import type {
-  ConnectionConfig,
+  DatabaseOptions,
   FindManyOptions,
   FindPageOptions,
   FindPageResult,
@@ -165,12 +165,13 @@ export type Kindstore<
 > = KindStoreSurface<TKinds, TMetadata>;
 
 export function createStore<TKinds extends KindRegistry, TMetadata extends MetadataDefinitionMap>(
-  connection: ConnectionConfig,
+  filename: string,
+  databaseOptions: DatabaseOptions | undefined,
   kinds: TKinds,
   metadataDefinitions: TMetadata,
   schemaDefinition?: SchemaDefinition,
 ) {
-  const database = new Database(connection.filename, connection.options);
+  const database = new Database(filename, databaseOptions);
   try {
     const runtime = new KindstoreRuntime<TMetadata>(
       database,
@@ -397,7 +398,7 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
       }
       if (!this.kinds.has(previousKey)) {
         throw new Error(
-          `Previous kind "${previousKey}" is missing from the current registry and requires schema.migrate(...).`,
+          `Previous kind "${previousKey}" is missing from the current registry and requires migrate(...).`,
         );
       }
     }
@@ -471,7 +472,7 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
     const expectedPreviousTag = this.schemaPlan.retags.get(key);
     if (expectedPreviousTag !== previous.tag) {
       throw new Error(
-        `Kind "${key}" changed tag from "${previous.tag}" to "${current.definition.tag}" and requires schema.migrate(...).`,
+        `Kind "${key}" changed tag from "${previous.tag}" to "${current.definition.tag}" and requires migrate(...).`,
       );
     }
     const updateIds = this.database.query(
