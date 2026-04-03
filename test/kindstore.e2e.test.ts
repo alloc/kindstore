@@ -250,6 +250,38 @@ describe("kindstore", () => {
     db.close();
   });
 
+  test("applies managed timestamps when creating documents", () => {
+    const filename = `file:kindstore-create-timestamps-${crypto.randomUUID()}?mode=memory&cache=shared`;
+    const Task = z.object({
+      title: z.string(),
+      createdAt: z.number().int(),
+      updatedAt: z.number().int(),
+    });
+    const db = kindstore({
+      filename,
+      schema: {
+        tasks: kind("tsk", Task).createdAt().updatedAt(),
+      },
+    });
+
+    const created = db.tasks.create({
+      title: "Ship docs",
+      createdAt: 1,
+      updatedAt: 1,
+    });
+
+    expect(created).toEqual({
+      id: expect.stringMatching(/^tsk_/),
+      title: "Ship docs",
+      createdAt: expect.any(Number),
+      updatedAt: expect.any(Number),
+    });
+    expect(created.createdAt).toBe(created.updatedAt);
+    expect(db.tasks.get(created.id)).toEqual(created);
+
+    db.close();
+  });
+
   test("pages through indexed queries with a deterministic cursor", () => {
     const filename = `file:kindstore-pages-${crypto.randomUUID()}?mode=memory&cache=shared`;
     const Task = z.object({

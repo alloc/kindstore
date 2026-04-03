@@ -38,6 +38,7 @@ const task = db.tasks.create({
 
 `create()` allocates a fresh tagged ID, validates the value, and stores it.
 The returned document includes the generated `id`.
+If allocation collides, `create()` fails instead of replacing an existing row.
 
 If you need to choose or hold the ID yourself, use `newId()` and `put()`
 directly:

@@ -54,8 +54,8 @@ The durable contract is:
 `create(value)` generates a fresh tagged ID, validates the provided value, and
 stores it as a new document.
 
-It is equivalent to calling `put(newId(), value)` and returns the validated
-stored value, including the generated `id`.
+If ID allocation collides, `create` fails rather than replacing an existing
+document. It returns the validated stored value, including the generated `id`.
 
 ### `get(id)`
 

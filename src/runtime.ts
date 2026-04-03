@@ -574,6 +574,7 @@ class KindCollectionRuntime<T extends KindDefinition> implements KindCollection<
   readonly database: Database;
   readonly definition: KindRuntimeDefinition<T>;
   readonly getStatement;
+  readonly createStatement;
   readonly putStatement;
   readonly deleteStatement;
   readonly updateStatement;
@@ -583,6 +584,9 @@ class KindCollectionRuntime<T extends KindDefinition> implements KindCollection<
     this.definition = definition;
     this.getStatement = database.query(
       `SELECT "id", "data" FROM ${quoteIdentifier(definition.table)} WHERE "id" = ?`,
+    );
+    this.createStatement = database.query(
+      `INSERT INTO ${quoteIdentifier(definition.table)} ("id", "data") VALUES (?, ?)`,
     );
     this.putStatement = database.query(
       `INSERT INTO ${quoteIdentifier(definition.table)} ("id", "data") VALUES (?, ?)
@@ -601,7 +605,10 @@ class KindCollectionRuntime<T extends KindDefinition> implements KindCollection<
   }
 
   create(value: KindInput<T>) {
-    return this.put(this.newId(), value);
+    const id = this.newId();
+    const parsed = this.prepareStoredValue(value, undefined, true, Date.now());
+    this.createStatement.run(id, JSON.stringify(parsed));
+    return this.attachId(id, parsed);
   }
 
   get(id: KindId<T>) {
@@ -614,13 +621,7 @@ class KindCollectionRuntime<T extends KindDefinition> implements KindCollection<
     assertTaggedId(this.definition.definition.tag, id);
     return this.database.transaction(() => {
       const row = this.getStatement.get(id) as StoredRow | undefined;
-      const parsed = applyManagedTimestamps(
-        this.definition,
-        stripDocumentId(value as Record<string, unknown>),
-        row ? parseRowData(row.data) : undefined,
-        Date.now(),
-        !row,
-      );
+      const parsed = this.prepareStoredValue(value, row ? parseRowData(row.data) : undefined, !row);
       this.putStatement.run(id, JSON.stringify(parsed));
       return this.attachId(id, parsed);
     })();
@@ -646,13 +647,7 @@ class KindCollectionRuntime<T extends KindDefinition> implements KindCollection<
         typeof updater === "function"
           ? (updater(current) as Record<string, unknown>)
           : ({ ...current, ...updater } as Record<string, unknown>);
-      const parsed = applyManagedTimestamps(
-        this.definition,
-        stripDocumentId(nextValue),
-        parseRowData(row.data),
-        Date.now(),
-        false,
-      );
+      const parsed = this.prepareStoredValue(nextValue, parseRowData(row.data), false);
       this.updateStatement.run(JSON.stringify(parsed), id);
       return this.attachId(id, parsed);
     })();
@@ -721,6 +716,15 @@ class KindCollectionRuntime<T extends KindDefinition> implements KindCollection<
 
   private attachId(id: KindId<T>, value: Record<string, unknown>) {
     return { id, ...value } as KindOutput<T>;
+  }
+
+  private prepareStoredValue(
+    value: Record<string, unknown>,
+    current: Record<string, unknown> | undefined,
+    insert: boolean,
+    now = Date.now(),
+  ) {
+    return applyManagedTimestamps(this.definition, stripDocumentId(value), current, now, insert);
   }
 
   private compileSelect(options: FindManyOptions<T>) {

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1
+
+- Fixed `collection.create(value)` to use insert-only semantics instead of inheriting `put()` upsert behavior when writing a generated ID.
+
 ## 0.3.0
 
 Note: There is no supported migration path from 0.2.x to 0.3.x.
