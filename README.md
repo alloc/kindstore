@@ -10,6 +10,12 @@ Requires Bun at runtime because kindstore uses `bun:sqlite`.
 bun add kindstore zod
 ```
 
+If you want the companion skill in Codex/Skills:
+
+```sh
+npx skills add alloc/kindstore
+```
+
 ```ts
 import { z } from "zod";
 import { kind, kindstore } from "kindstore";
