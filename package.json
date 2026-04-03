@@ -1,6 +1,6 @@
 {
   "name": "kindstore",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "A lightweight, typed document store on SQLite with Zod schemas, indexed queries, and explicit migrations.",
   "license": "MIT",
   "author": "Alec Larson",
