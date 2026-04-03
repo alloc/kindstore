@@ -28,15 +28,13 @@ test("type-level validation of core primitives", () => {
     name: z.string(),
     age: z.number(),
     status: z.enum(["active", "inactive"]).optional(),
-    createdAt: z.number().optional(),
-    updatedAt: z.number().optional(),
   });
 
   const userKind = kind("usr", userSchema)
     .index("status", { type: "text" })
     .index("age", { type: "integer" })
-    .createdAt("createdAt")
-    .updatedAt("updatedAt");
+    .createdAt()
+    .updatedAt();
 
   type UserBag = typeof userKind extends KindBuilder<infer B extends KindDefinition> ? B : never;
 
@@ -46,8 +44,8 @@ test("type-level validation of core primitives", () => {
     name: string;
     age: number;
     status?: "active" | "inactive" | undefined;
-    createdAt?: number | undefined;
-    updatedAt?: number | undefined;
+    createdAt: number;
+    updatedAt: number;
   }>();
 
   // KindInput allows omitting managed timestamps

@@ -63,8 +63,6 @@ the change as persisted identity work.
 const TimestampedTask = z.object({
   title: z.string(),
   status: z.enum(["todo", "doing", "done"]),
-  createdAt: z.number().int(),
-  updatedAt: z.number().int(),
 });
 
 const TimestampedTasks = kind("tsk", TimestampedTask)
@@ -75,8 +73,8 @@ const TimestampedTasks = kind("tsk", TimestampedTask)
 
 Use this when `createdAt` and `updatedAt` are store-owned payload fields rather
 than caller-owned data. The benefit is that callers do not need to assign or
-preserve those values manually, while the fields still live in the payload
-schema readers work with.
+preserve those values manually, and the builder adds integer timestamp fields to
+the payload schema readers work with when they are missing.
 
 Notice that `.updatedAt()` does not imply `.index("updatedAt")`.
 One is about value assignment policy. The other is about query intent.

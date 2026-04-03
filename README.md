@@ -26,7 +26,6 @@ const Post = z.object({
   slug: z.string(),
   title: z.string(),
   status: z.enum(["draft", "published"]),
-  updatedAt: z.number().int(),
 });
 
 const db = kindstore({

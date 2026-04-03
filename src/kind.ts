@@ -3,19 +3,18 @@ import { z } from "zod";
 import type {
   IndexDirection,
   KindDefinition,
+  KindManagedCreatedAt,
+  KindManagedUpdatedAt,
   KindMigration,
   KindPropertyKey,
+  ManagedTimestampState,
   SqliteTypeHint,
+  managedTimestampFieldsSymbol,
 } from "./types";
 
 type MultiIndexFields<T extends KindDefinition> = {
   [K in KindPropertyKey<T>]?: IndexDirection;
 };
-
-type DefaultManagedTimestampField<
-  T extends KindDefinition,
-  TName extends "createdAt" | "updatedAt",
-> = Extract<TName, KindPropertyKey<T>>;
 
 type IndexDefinition = {
   field: string;
@@ -28,12 +27,33 @@ type MultiIndexDefinition = {
   fields: readonly [string, IndexDirection][];
 };
 
+type ExtendSchema<TSchema extends z.ZodObject<any>, TKey extends string> =
+  TSchema extends z.ZodObject<infer TShape, infer TConfig>
+    ? z.ZodObject<Omit<TShape, TKey> & Record<TKey, z.ZodNumber>, TConfig>
+    : never;
+
+type ExtendKindSchema<T extends KindDefinition, TKey extends string> = Omit<T, "schema"> & {
+  schema: TKey extends KindPropertyKey<T> ? T["schema"] : ExtendSchema<T["schema"], TKey>;
+};
+
+type SetManagedCreatedAt<T extends KindDefinition, TKey extends string> = Omit<
+  ExtendKindSchema<T, TKey>,
+  typeof managedTimestampFieldsSymbol
+> &
+  ManagedTimestampState<TKey, KindManagedUpdatedAt<T>>;
+
+type SetManagedUpdatedAt<T extends KindDefinition, TKey extends string> = Omit<
+  ExtendKindSchema<T, TKey>,
+  typeof managedTimestampFieldsSymbol
+> &
+  ManagedTimestampState<KindManagedCreatedAt<T>, TKey>;
+
 export class KindBuilder<T extends KindDefinition> {
   readonly tag: T["tag"];
-  readonly schema: T["schema"];
+  schema: T["schema"];
   version: T["version"];
-  createdAtField?: T["createdAt"];
-  updatedAtField?: T["updatedAt"];
+  createdAtField?: KindManagedCreatedAt<T>;
+  updatedAtField?: KindManagedUpdatedAt<T>;
   readonly indexes = new Map<string, IndexDefinition>();
   readonly multiIndexes: MultiIndexDefinition[] = [];
   migrations?: Record<number, KindMigration<T>>;
@@ -54,30 +74,38 @@ export class KindBuilder<T extends KindDefinition> {
     return this as unknown as KindBuilder<Omit<T, "indexed"> & { indexed: T["indexed"] | TKey }>;
   }
 
-  createdAt<TKey extends KindPropertyKey<T> = DefaultManagedTimestampField<T, "createdAt">>(
-    ...args: DefaultManagedTimestampField<T, "createdAt"> extends never
-      ? [field: KindPropertyKey<T>]
-      : [field?: TKey]
-  ) {
-    const field = (args[0] ?? "createdAt") as TKey;
-    if (field === this.updatedAtField) {
-      throw new Error(`Kind "${this.tag}" cannot use "${field}" for both createdAt and updatedAt.`);
+  createdAt<const TKey extends string = "createdAt">(field?: TKey) {
+    const resolvedField = (field ?? "createdAt") as TKey;
+    const shape = this.schema.shape as Record<string, unknown>;
+    if (!(resolvedField in shape)) {
+      this.schema = this.schema.extend({
+        [resolvedField]: z.number().int(),
+      } as Record<TKey, z.ZodNumber>) as T["schema"];
     }
-    this.createdAtField = field as T["createdAt"];
-    return this as unknown as KindBuilder<Omit<T, "createdAt"> & { createdAt: TKey }>;
+    if (resolvedField === this.updatedAtField) {
+      throw new Error(
+        `Kind "${this.tag}" cannot use "${resolvedField}" for both createdAt and updatedAt.`,
+      );
+    }
+    this.createdAtField = resolvedField as KindManagedCreatedAt<T>;
+    return this as unknown as KindBuilder<SetManagedCreatedAt<T, TKey>>;
   }
 
-  updatedAt<TKey extends KindPropertyKey<T> = DefaultManagedTimestampField<T, "updatedAt">>(
-    ...args: DefaultManagedTimestampField<T, "updatedAt"> extends never
-      ? [field: KindPropertyKey<T>]
-      : [field?: TKey]
-  ) {
-    const field = (args[0] ?? "updatedAt") as TKey;
-    if (field === this.createdAtField) {
-      throw new Error(`Kind "${this.tag}" cannot use "${field}" for both createdAt and updatedAt.`);
+  updatedAt<const TKey extends string = "updatedAt">(field?: TKey) {
+    const resolvedField = (field ?? "updatedAt") as TKey;
+    const shape = this.schema.shape as Record<string, unknown>;
+    if (!(resolvedField in shape)) {
+      this.schema = this.schema.extend({
+        [resolvedField]: z.number().int(),
+      } as Record<TKey, z.ZodNumber>) as T["schema"];
     }
-    this.updatedAtField = field as T["updatedAt"];
-    return this as unknown as KindBuilder<Omit<T, "updatedAt"> & { updatedAt: TKey }>;
+    if (resolvedField === this.createdAtField) {
+      throw new Error(
+        `Kind "${this.tag}" cannot use "${resolvedField}" for both createdAt and updatedAt.`,
+      );
+    }
+    this.updatedAtField = resolvedField as KindManagedUpdatedAt<T>;
+    return this as unknown as KindBuilder<SetManagedUpdatedAt<T, TKey>>;
   }
 
   multi<
@@ -118,8 +146,6 @@ export function kind<const TTag extends string, const TSchema extends z.ZodObjec
     tag: TTag;
     schema: TSchema;
     indexed: never;
-    createdAt: never;
-    updatedAt: never;
     version: 1;
   }>(tag, schema, 1);
 }

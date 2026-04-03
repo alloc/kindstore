@@ -11,21 +11,40 @@ export type TaggedId<Tag extends string> = `${Tag}_${string}` & {
   readonly __kindstoreTag?: Tag;
 };
 
+export declare const managedTimestampFieldsSymbol: unique symbol;
+
+export type ManagedTimestampState<
+  TCreatedAt extends string = never,
+  TUpdatedAt extends string = never,
+> = {
+  [managedTimestampFieldsSymbol]?: {
+    createdAt: TCreatedAt;
+    updatedAt: TUpdatedAt;
+  };
+};
+
 export type KindDefinition = {
   tag: string;
   schema: z.ZodObject<any>;
   indexed: string;
-  createdAt: string;
-  updatedAt: string;
   version: number;
 };
 
 export type KindPropertyKey<T extends KindDefinition> = keyof z.input<T["schema"]> & string;
 
-type KindManagedTimestampField<T extends KindDefinition> = Extract<
-  T["createdAt"] | T["updatedAt"],
+export type KindManagedCreatedAt<T extends KindDefinition> = Extract<
+  T extends ManagedTimestampState<infer TCreatedAt, string> ? TCreatedAt : never,
   KindPropertyKey<T>
 >;
+
+export type KindManagedUpdatedAt<T extends KindDefinition> = Extract<
+  T extends ManagedTimestampState<string, infer TUpdatedAt> ? TUpdatedAt : never,
+  KindPropertyKey<T>
+>;
+
+type KindManagedTimestampField<T extends KindDefinition> =
+  | KindManagedCreatedAt<T>
+  | KindManagedUpdatedAt<T>;
 
 export type KindOutput<T extends KindDefinition> = {
   id: KindId<T>;

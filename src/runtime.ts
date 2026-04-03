@@ -11,6 +11,8 @@ import type {
   KindDefinition,
   KindId,
   KindInput,
+  KindManagedCreatedAt,
+  KindManagedUpdatedAt,
   KindMigrationContext,
   KindOutput,
   KindPageCursor,
@@ -62,8 +64,8 @@ type KindRuntimeDefinition<T extends KindDefinition> = {
   key: string;
   table: string;
   columns: Map<string, IndexColumn>;
-  createdAtField?: T["createdAt"];
-  updatedAtField?: T["updatedAt"];
+  createdAtField?: KindManagedCreatedAt<T>;
+  updatedAtField?: KindManagedUpdatedAt<T>;
   definition: KindBuilder<T>;
 };
 

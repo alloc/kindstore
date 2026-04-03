@@ -33,7 +33,6 @@ Now suppose version 2 adds `status` and `updatedAt`.
 const TaskV2 = z.object({
   title: z.string(),
   status: z.enum(["todo", "doing", "done"]),
-  updatedAt: z.number().int(),
 });
 ```
 

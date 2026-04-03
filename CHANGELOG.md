@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.2
+
+- Fixed `.createdAt()` and `.updatedAt()` to extend the kind schema with integer timestamp fields when they are missing, while keeping those fields store-managed.
+
 ## 0.3.1
 
 - Fixed `collection.create(value)` to use insert-only semantics instead of inheriting `put()` upsert behavior when writing a generated ID.

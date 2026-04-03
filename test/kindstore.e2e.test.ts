@@ -10,8 +10,6 @@ describe("kindstore", () => {
       userId: z.string(),
       status: z.enum(["active", "revoked", "expired"]),
       expiresAt: z.number().int(),
-      createdAt: z.number().int(),
-      updatedAt: z.number().int(),
       deviceId: z.string().optional(),
     });
     const AppMetadata = z.object({
@@ -254,8 +252,6 @@ describe("kindstore", () => {
     const filename = `file:kindstore-create-timestamps-${crypto.randomUUID()}?mode=memory&cache=shared`;
     const Task = z.object({
       title: z.string(),
-      createdAt: z.number().int(),
-      updatedAt: z.number().int(),
     });
     const db = kindstore({
       filename,
@@ -562,7 +558,6 @@ describe("kindstore", () => {
     const TaskV2 = z.object({
       title: z.string(),
       status: z.enum(["open", "done"]),
-      updatedAt: z.number().int(),
     });
     const migrated = kindstore({
       filename,
@@ -738,8 +733,6 @@ describe("kindstore", () => {
     const filename = `file:kindstore-default-timestamps-${crypto.randomUUID()}?mode=memory&cache=shared`;
     const Session = z.object({
       userId: z.string(),
-      createdAt: z.number().int(),
-      updatedAt: z.number().int(),
     });
     const db = kindstore({
       filename,
@@ -753,6 +746,35 @@ describe("kindstore", () => {
     expect(session.createdAt).toEqual(expect.any(Number));
     expect(session.updatedAt).toEqual(expect.any(Number));
     expect(session.updatedAt).toBeGreaterThanOrEqual(session.createdAt);
+    db.close();
+  });
+
+  test("adds custom managed timestamp fields to the schema when missing", () => {
+    const filename = `file:kindstore-custom-timestamps-${crypto.randomUUID()}?mode=memory&cache=shared`;
+    const Session = z.object({
+      userId: z.string(),
+    });
+    const db = kindstore({
+      filename,
+      schema: {
+        sessions: kind("ses", Session)
+          .createdAt("createdOn")
+          .updatedAt("modifiedOn")
+          .index("userId")
+          .index("modifiedOn"),
+      },
+    });
+    const session = db.sessions.put(db.sessions.newId(), {
+      userId: "usr_1",
+    });
+    expect(session.createdOn).toEqual(expect.any(Number));
+    expect(session.modifiedOn).toEqual(expect.any(Number));
+    expect(
+      db.sessions.first({
+        where: { userId: "usr_1" },
+        orderBy: { modifiedOn: "desc" },
+      }),
+    ).toEqual(session);
     db.close();
   });
 
