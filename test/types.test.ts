@@ -2,10 +2,12 @@ import { expectTypeOf, test } from "bun:test";
 import { z } from "zod";
 
 import { kind } from "../src/kind";
+import type { KindDefinition } from "../src/kind";
 import type {
   FindManyOptions,
   FindPageOptions,
   FindPageResult,
+  KindDefinitionBag,
   KindId,
   KindInputValue,
   KindPageCursor,
@@ -34,7 +36,7 @@ test("type-level validation of core primitives", () => {
     .createdAt("createdAt")
     .updatedAt("updatedAt");
 
-  type UserBag = typeof userKind extends import("../src/kind").KindDefinition<infer B extends import("../src/types").KindDefinitionBag> ? B : never;
+  type UserBag = typeof userKind extends KindDefinition<infer B extends KindDefinitionBag> ? B : never;
 
   // KindValue exactly matches the schema output
   expectTypeOf<KindValue<UserBag>>().toEqualTypeOf<{

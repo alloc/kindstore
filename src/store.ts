@@ -4,6 +4,7 @@ import type { KindDefinition } from "./kind";
 import { createStore } from "./runtime";
 import type {
   ConnectionConfig,
+  KindDefinitionBag,
   KindRegistry,
   MetadataDefinitionMap,
   SchemaDefinition,
@@ -30,7 +31,7 @@ type InferMetadata<TInput extends AnyStoreInput> = TInput extends {
   ? TMetadata
   : {};
 
-export type KindCollection<T extends import("./types").KindDefinitionBag> = PublicKindCollection<T>;
+export type KindCollection<T extends KindDefinitionBag> = PublicKindCollection<T>;
 
 export type MetadataCollection<T extends MetadataDefinitionMap> = PublicMetadataCollection<T>;
 
