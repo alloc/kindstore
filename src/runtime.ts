@@ -626,36 +626,13 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
         }
         updateRow.run(
           JSON.stringify(
-            this.applyManagedTimestamps(definition, value, parsePayload(row.payload), now, false),
+            applyManagedTimestamps(definition, value, parsePayload(row.payload), now, false),
           ),
           row.id,
         );
       }
       this.internal.setKindVersion(definition.key, definition.definition.version);
     })();
-  }
-
-  private applyManagedTimestamps<T extends KindDefinitionBag>(
-    definition: KindRuntimeDefinition<T>,
-    value: Record<string, unknown>,
-    current: Record<string, unknown> | undefined,
-    now: number,
-    insert: boolean,
-  ) {
-    const next = { ...value };
-    if (definition.createdAtField) {
-      if (current && Object.hasOwn(current, definition.createdAtField)) {
-        next[definition.createdAtField] = current[definition.createdAtField];
-      } else if (insert) {
-        next[definition.createdAtField] = now;
-      } else {
-        delete next[definition.createdAtField];
-      }
-    }
-    if (definition.updatedAtField) {
-      next[definition.updatedAtField] = now;
-    }
-    return definition.definition.schema.parse(next);
   }
 }
 
@@ -699,9 +676,10 @@ class KindCollectionRuntime<T extends KindDefinitionBag> implements KindCollecti
     assertTaggedId(this.definition.definition.tag, id);
     return this.database.transaction(() => {
       const row = this.getStatement.get(id) as StoredRow | undefined;
-      const parsed = this.applyManagedTimestamps(
+      const parsed = applyManagedTimestamps(
+        this.definition,
         value as Record<string, unknown>,
-        row,
+        row ? parsePayload(row.payload) : undefined,
         Date.now(),
         !row,
       );
@@ -726,11 +704,12 @@ class KindCollectionRuntime<T extends KindDefinitionBag> implements KindCollecti
         return undefined;
       }
       const current = this.parseRow(row);
-      const parsed = this.applyManagedTimestamps(
+      const parsed = applyManagedTimestamps(
+        this.definition,
         typeof updater === "function"
           ? (updater(current) as Record<string, unknown>)
           : ({ ...current, ...updater } as Record<string, unknown>),
-        row,
+        parsePayload(row.payload),
         Date.now(),
         false,
       );
@@ -794,29 +773,6 @@ class KindCollectionRuntime<T extends KindDefinitionBag> implements KindCollecti
 
   private parseRow(row: StoredRow) {
     return this.definition.definition.schema.parse(parsePayload(row.payload));
-  }
-
-  private applyManagedTimestamps(
-    value: Record<string, unknown>,
-    row: StoredRow | undefined,
-    now: number,
-    insert: boolean,
-  ) {
-    const current = row ? parsePayload(row.payload) : undefined;
-    const next = { ...value };
-    if (this.definition.createdAtField) {
-      if (current && Object.hasOwn(current, this.definition.createdAtField)) {
-        next[this.definition.createdAtField] = current[this.definition.createdAtField];
-      } else if (insert) {
-        next[this.definition.createdAtField] = now;
-      } else {
-        delete next[this.definition.createdAtField];
-      }
-    }
-    if (this.definition.updatedAtField) {
-      next[this.definition.updatedAtField] = now;
-    }
-    return this.definition.definition.schema.parse(next);
   }
 
   private compileSelect(options: FindManyOptions<T>) {
@@ -1558,4 +1514,27 @@ function snapshotIndexes<T extends KindDefinitionBag>(definition: KindRuntimeDef
     };
   }
   return indexes;
+}
+
+function applyManagedTimestamps<T extends KindDefinitionBag>(
+  definition: KindRuntimeDefinition<T>,
+  value: Record<string, unknown>,
+  current: Record<string, unknown> | undefined,
+  now: number,
+  insert: boolean,
+) {
+  const next = { ...value };
+  if (definition.createdAtField) {
+    if (current && Object.hasOwn(current, definition.createdAtField)) {
+      next[definition.createdAtField] = current[definition.createdAtField];
+    } else if (insert) {
+      next[definition.createdAtField] = now;
+    } else {
+      delete next[definition.createdAtField];
+    }
+  }
+  if (definition.updatedAtField) {
+    next[definition.updatedAtField] = now;
+  }
+  return definition.definition.schema.parse(next);
 }
