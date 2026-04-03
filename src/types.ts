@@ -20,29 +20,26 @@ export type KindDefinition = {
   version: number;
 };
 
-type KindRowDataValue<T extends KindDefinition> = z.output<T["schema"]>;
+export type KindPropertyKey<T extends KindDefinition> = keyof z.input<T["schema"]> & string;
 
 type KindManagedTimestampField<T extends KindDefinition> = Extract<
   T["createdAt"] | T["updatedAt"],
-  keyof KindRowDataValue<T> & string
+  KindPropertyKey<T>
 >;
 
-export type KindValue<T extends KindDefinition> = {
+export type KindOutput<T extends KindDefinition> = {
   id: KindId<T>;
-} & Omit<KindRowDataValue<T>, "id">;
+} & Omit<z.output<T["schema"]>, "id">;
 
-export type KindInputValue<T extends KindDefinition> = Omit<
-  KindRowDataValue<T>,
+export type KindInput<T extends KindDefinition> = Omit<
+  z.input<T["schema"]>,
   KindManagedTimestampField<T> | "id" | "data"
 > &
-  Partial<Pick<KindRowDataValue<T>, KindManagedTimestampField<T>>>;
+  Partial<Pick<z.input<T["schema"]>, KindManagedTimestampField<T>>>;
 
 export type KindId<T extends KindDefinition> = TaggedId<T["tag"]>;
 
-export type KindIndexedField<T extends KindDefinition> = Extract<
-  T["indexed"],
-  keyof KindRowDataValue<T> & string
->;
+export type KindIndexedField<T extends KindDefinition> = Extract<T["indexed"], KindPropertyKey<T>>;
 
 export type FilterOperators<T> = {
   in?: readonly Exclude<T, undefined>[];
@@ -55,7 +52,7 @@ export type FilterOperators<T> = {
 export type WhereOperand<T> = Exclude<T, undefined> | null | FilterOperators<T>;
 
 export type KindWhere<T extends KindDefinition> = Partial<{
-  [K in KindIndexedField<T>]: WhereOperand<KindRowDataValue<T>[K]>;
+  [K in KindIndexedField<T>]: WhereOperand<z.output<T["schema"]>[K]>;
 }>;
 
 export type KindOrderBy<T extends KindDefinition> = Partial<
@@ -80,7 +77,7 @@ export type FindPageOptions<T extends KindDefinition> = {
 };
 
 export type FindPageResult<T extends KindDefinition> = {
-  items: KindValue<T>[];
+  items: KindOutput<T>[];
   next?: KindPageCursor<T>;
 };
 
@@ -90,10 +87,10 @@ export type KindMigrationContext = {
   readonly now: number;
 };
 
-export type KindMigration<T extends object> = (
-  value: Partial<T> & Record<string, unknown>,
+export type KindMigration<T extends KindDefinition> = (
+  value: Partial<z.output<T["schema"]>> & Record<string, unknown>,
   context: KindMigrationContext,
-) => T | Record<string, unknown>;
+) => z.output<T["schema"]> | Record<string, unknown>;
 
 export type MetadataDefinitionMap = Record<string, z.ZodTypeAny>;
 

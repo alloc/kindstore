@@ -10,11 +10,11 @@ import type {
   IndexDirection,
   KindDefinition,
   KindId,
-  KindInputValue,
+  KindInput,
   KindMigrationContext,
+  KindOutput,
   KindPageCursor,
   KindRegistry,
-  KindValue,
   KindWhere,
   MetadataDefinitionMap,
   MetadataValue,
@@ -43,13 +43,12 @@ const STORE_FORMAT_VERSION_KEY = "store_format_version";
 const KIND_VERSIONS_KEY = "kind_versions";
 const SCHEMA_SNAPSHOT_KEY = "schema_snapshot";
 const RESERVED_STORE_KEYS = new Set(["batch", "close", "connection", "metadata", "raw"]);
-const DOCUMENT_ROW_DATA_COLUMN = "data";
 const nextUlid = monotonicFactory();
 const PAGE_CURSOR_VERSION = 1;
 
 type StoredRow = {
   id: string;
-  rowData: string;
+  data: string;
 };
 
 type IndexColumn = {
@@ -121,18 +120,18 @@ type PageCursorData = {
 
 export type KindCollection<T extends KindDefinition> = {
   newId(): KindId<T>;
-  create(value: KindInputValue<T>): KindValue<T>;
-  get(id: KindId<T>): KindValue<T> | undefined;
-  put(id: KindId<T>, value: KindInputValue<T>): KindValue<T>;
+  create(value: KindInput<T>): KindOutput<T>;
+  get(id: KindId<T>): KindOutput<T> | undefined;
+  put(id: KindId<T>, value: KindInput<T>): KindOutput<T>;
   delete(id: KindId<T>): boolean;
   update(
     id: KindId<T>,
-    updater: PatchValue<KindInputValue<T>> | ((current: KindValue<T>) => KindInputValue<T>),
-  ): KindValue<T> | undefined;
-  first(options?: FindManyOptions<T>): KindValue<T> | undefined;
-  findMany(options?: FindManyOptions<T>): KindValue<T>[];
+    updater: PatchValue<KindInput<T>> | ((current: KindOutput<T>) => KindInput<T>),
+  ): KindOutput<T> | undefined;
+  first(options?: FindManyOptions<T>): KindOutput<T> | undefined;
+  findMany(options?: FindManyOptions<T>): KindOutput<T>[];
   findPage(options: FindPageOptions<T>): FindPageResult<T>;
-  iterate(options?: FindManyOptions<T>): IterableIterator<KindValue<T>>;
+  iterate(options?: FindManyOptions<T>): IterableIterator<KindOutput<T>>;
 };
 
 export type MetadataCollection<T extends MetadataDefinitionMap> = {
@@ -433,7 +432,7 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
     this.database.run(
       `CREATE TABLE IF NOT EXISTS ${quoteIdentifier(definition.table)} (
         "id" TEXT PRIMARY KEY NOT NULL,
-        ${quoteIdentifier(DOCUMENT_ROW_DATA_COLUMN)} TEXT NOT NULL
+        "data" TEXT NOT NULL
       ) STRICT`,
     );
   }
@@ -538,17 +537,17 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
       );
     }
     const updateRow = this.database.query(
-      `UPDATE ${quoteIdentifier(definition.table)} SET ${quoteIdentifier(DOCUMENT_ROW_DATA_COLUMN)} = ? WHERE "id" = ?`,
+      `UPDATE ${quoteIdentifier(definition.table)} SET "data" = ? WHERE "id" = ?`,
     );
     this.database.transaction(() => {
       const now = Date.now();
       const context: KindMigrationContext = { now };
       for (const row of this.database
         .query(
-          `SELECT "id", ${quoteIdentifier(DOCUMENT_ROW_DATA_COLUMN)} AS "rowData" FROM ${quoteIdentifier(definition.table)} ORDER BY "id" ASC`,
+          `SELECT "id", "data" FROM ${quoteIdentifier(definition.table)} ORDER BY "id" ASC`,
         )
         .iterate() as IterableIterator<StoredRow>) {
-        let value = parseRowData(row.rowData);
+        let value = parseRowData(row.data);
         for (
           let currentVersion = version;
           currentVersion < definition.definition.version;
@@ -570,7 +569,7 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
             applyManagedTimestamps(
               definition,
               value,
-              parseRowData(row.rowData),
+              parseRowData(row.data),
               now,
               false,
             ),
@@ -595,17 +594,17 @@ class KindCollectionRuntime<T extends KindDefinition> implements KindCollection<
     this.database = database;
     this.definition = definition;
     this.getStatement = database.query(
-      `SELECT "id", ${quoteIdentifier(DOCUMENT_ROW_DATA_COLUMN)} AS "rowData" FROM ${quoteIdentifier(definition.table)} WHERE "id" = ?`,
+      `SELECT "id", "data" FROM ${quoteIdentifier(definition.table)} WHERE "id" = ?`,
     );
     this.putStatement = database.query(
-      `INSERT INTO ${quoteIdentifier(definition.table)} ("id", ${quoteIdentifier(DOCUMENT_ROW_DATA_COLUMN)}) VALUES (?, ?)
-       ON CONFLICT("id") DO UPDATE SET ${quoteIdentifier(DOCUMENT_ROW_DATA_COLUMN)} = excluded.${quoteIdentifier(DOCUMENT_ROW_DATA_COLUMN)}`,
+      `INSERT INTO ${quoteIdentifier(definition.table)} ("id", "data") VALUES (?, ?)
+       ON CONFLICT("id") DO UPDATE SET "data" = excluded."data"`,
     );
     this.deleteStatement = database.query(
       `DELETE FROM ${quoteIdentifier(definition.table)} WHERE "id" = ?`,
     );
     this.updateStatement = database.query(
-      `UPDATE ${quoteIdentifier(definition.table)} SET ${quoteIdentifier(DOCUMENT_ROW_DATA_COLUMN)} = ? WHERE "id" = ?`,
+      `UPDATE ${quoteIdentifier(definition.table)} SET "data" = ? WHERE "id" = ?`,
     );
   }
 
@@ -613,7 +612,7 @@ class KindCollectionRuntime<T extends KindDefinition> implements KindCollection<
     return `${this.definition.definition.tag}_${nextUlid()}` as KindId<T>;
   }
 
-  create(value: KindInputValue<T>) {
+  create(value: KindInput<T>) {
     return this.put(this.newId(), value);
   }
 
@@ -623,14 +622,14 @@ class KindCollectionRuntime<T extends KindDefinition> implements KindCollection<
     return row ? this.parseRow(row) : undefined;
   }
 
-  put(id: KindId<T>, value: KindInputValue<T>) {
+  put(id: KindId<T>, value: KindInput<T>) {
     assertTaggedId(this.definition.definition.tag, id);
     return this.database.transaction(() => {
       const row = this.getStatement.get(id) as StoredRow | undefined;
       const parsed = applyManagedTimestamps(
         this.definition,
         stripDocumentId(value as Record<string, unknown>),
-        row ? parseRowData(row.rowData) : undefined,
+        row ? parseRowData(row.data) : undefined,
         Date.now(),
         !row,
       );
@@ -646,7 +645,7 @@ class KindCollectionRuntime<T extends KindDefinition> implements KindCollection<
 
   update(
     id: KindId<T>,
-    updater: PatchValue<KindInputValue<T>> | ((current: KindValue<T>) => KindInputValue<T>),
+    updater: PatchValue<KindInput<T>> | ((current: KindOutput<T>) => KindInput<T>),
   ) {
     assertTaggedId(this.definition.definition.tag, id);
     return this.database.transaction(() => {
@@ -662,7 +661,7 @@ class KindCollectionRuntime<T extends KindDefinition> implements KindCollection<
       const parsed = applyManagedTimestamps(
         this.definition,
         stripDocumentId(nextValue),
-        parseRowData(row.rowData),
+        parseRowData(row.data),
         Date.now(),
         false,
       );
@@ -699,7 +698,7 @@ class KindCollectionRuntime<T extends KindDefinition> implements KindCollection<
       compileWhere(this.definition.columns, options.where),
       compilePageAfter(this.definition, orderEntries, options.after),
     );
-    const sql = `SELECT "id", ${quoteIdentifier(DOCUMENT_ROW_DATA_COLUMN)} AS "rowData" FROM ${quoteIdentifier(this.definition.table)}${where.sql}${compileOrderBy(orderEntries, true)} LIMIT ?`;
+    const sql = `SELECT "id", "data" FROM ${quoteIdentifier(this.definition.table)}${where.sql}${compileOrderBy(orderEntries, true)} LIMIT ?`;
     const rows = this.database.query(sql).all(...where.values, options.limit + 1) as StoredRow[];
     const pageRows = rows.slice(0, options.limit);
     const items = pageRows.map((row) => this.parseRow(row));
@@ -729,11 +728,11 @@ class KindCollectionRuntime<T extends KindDefinition> implements KindCollection<
   }
 
   private parseRowData(row: StoredRow) {
-    return this.definition.definition.schema.parse(parseRowData(row.rowData));
+    return this.definition.definition.schema.parse(parseRowData(row.data));
   }
 
   private attachId(id: KindId<T>, value: Record<string, unknown>) {
-    return { id, ...value } as KindValue<T>;
+    return { id, ...value } as KindOutput<T>;
   }
 
   private compileSelect(options: FindManyOptions<T>) {
@@ -745,7 +744,7 @@ class KindCollectionRuntime<T extends KindDefinition> implements KindCollection<
     const where = compileWhere(this.definition.columns, options.where);
     const orderBy = compileOrderBy(resolveOrderBy(this.definition.columns, options.orderBy));
     return {
-      sql: `SELECT "id", ${quoteIdentifier(DOCUMENT_ROW_DATA_COLUMN)} AS "rowData" FROM ${quoteIdentifier(this.definition.table)}${where.sql}${orderBy}${options.limit == null ? "" : " LIMIT ?"}`,
+      sql: `SELECT "id", "data" FROM ${quoteIdentifier(this.definition.table)}${where.sql}${orderBy}${options.limit == null ? "" : " LIMIT ?"}`,
       values: options.limit == null ? where.values : [...where.values, options.limit],
     };
   }
@@ -1382,7 +1381,7 @@ function encodePageCursor<T extends KindDefinition>(
   definition: KindRuntimeDefinition<T>,
   orderBy: ResolvedOrderByEntry[],
   row: StoredRow,
-  value: KindValue<T>,
+  value: KindOutput<T>,
 ) {
   const values = orderBy.map(({ field }) => {
     const fieldValue = (value as Record<string, unknown>)[field];

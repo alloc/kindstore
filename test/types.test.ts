@@ -11,9 +11,10 @@ import type {
   FindPageResult,
   KindDefinition,
   KindId,
-  KindInputValue,
+  KindInput,
+  KindOutput,
   KindPageCursor,
-  KindValue,
+  KindPropertyKey,
   KindWhere,
   MetadataValue,
   PatchValue,
@@ -40,8 +41,8 @@ test("type-level validation of core primitives", () => {
   type UserBag =
     typeof userKind extends KindBuilder<infer B extends KindDefinition> ? B : never;
 
-  // KindValue exactly matches the schema output
-  expectTypeOf<KindValue<UserBag>>().toEqualTypeOf<{
+  // KindOutput is the typed document shape returned from collection APIs
+  expectTypeOf<KindOutput<UserBag>>().toEqualTypeOf<{
     id: KindId<UserBag>;
     name: string;
     age: number;
@@ -50,14 +51,14 @@ test("type-level validation of core primitives", () => {
     updatedAt?: number | undefined;
   }>();
 
-  // KindInputValue allows omitting managed timestamps
-  expectTypeOf<KindInputValue<UserBag>>().toMatchTypeOf<{
+  // KindInput allows omitting managed timestamps
+  expectTypeOf<KindInput<UserBag>>().toMatchTypeOf<{
     name: string;
     age: number;
     status?: "active" | "inactive" | undefined;
   }>();
   // ... but allows providing them
-  expectTypeOf<KindInputValue<UserBag>>().toMatchTypeOf<{
+  expectTypeOf<KindInput<UserBag>>().toMatchTypeOf<{
     name: string;
     age: number;
     createdAt?: number;
@@ -70,6 +71,9 @@ test("type-level validation of core primitives", () => {
   expectTypeOf<"other_123">().not.toMatchTypeOf<KindId<UserBag>>();
 
   // KindWhere only allows fields that are indexed
+  expectTypeOf<KindPropertyKey<UserBag>>().toEqualTypeOf<
+    "name" | "age" | "status" | "createdAt" | "updatedAt"
+  >();
   expectTypeOf<KindWhere<UserBag>>().toEqualTypeOf<
     Partial<{
       status: WhereOperand<"active" | "inactive" | undefined>;
@@ -99,13 +103,13 @@ test("type-level validation of core primitives", () => {
 
   // FindPageResult structure
   expectTypeOf<FindPageResult<UserBag>>().toEqualTypeOf<{
-    items: KindValue<UserBag>[];
+    items: KindOutput<UserBag>[];
     next?: KindPageCursor<UserBag>;
   }>();
 
   // PatchValue handles partial object updates
-  expectTypeOf<PatchValue<KindInputValue<UserBag>>>().toEqualTypeOf<
-    Partial<KindInputValue<UserBag>>
+  expectTypeOf<PatchValue<KindInput<UserBag>>>().toEqualTypeOf<
+    Partial<KindInput<UserBag>>
   >();
 
   // MetadataValue resolves ZodTypeAny mapping

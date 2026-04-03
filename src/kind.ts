@@ -4,18 +4,18 @@ import type {
   IndexDirection,
   KindDefinition,
   KindMigration,
-  KindValue,
+  KindPropertyKey,
   SqliteTypeHint,
 } from "./types";
 
 type MultiIndexFields<T extends KindDefinition> = {
-  [K in keyof KindValue<T> & string]?: IndexDirection;
+  [K in KindPropertyKey<T>]?: IndexDirection;
 };
 
 type DefaultManagedTimestampField<
   T extends KindDefinition,
   TName extends "createdAt" | "updatedAt",
-> = Extract<TName, keyof KindValue<T> & string>;
+> = Extract<TName, KindPropertyKey<T>>;
 
 type IndexDefinition = {
   field: string;
@@ -36,7 +36,7 @@ export class KindBuilder<T extends KindDefinition> {
   updatedAtField?: T["updatedAt"];
   readonly indexes = new Map<string, IndexDefinition>();
   readonly multiIndexes: MultiIndexDefinition[] = [];
-  migrations?: Record<number, KindMigration<z.output<T["schema"]>>>;
+  migrations?: Record<number, KindMigration<T>>;
 
   constructor(tag: T["tag"], schema: T["schema"], version: T["version"]) {
     this.tag = tag;
@@ -44,7 +44,7 @@ export class KindBuilder<T extends KindDefinition> {
     this.version = version;
   }
 
-  index<TKey extends keyof KindValue<T> & string>(
+  index<TKey extends KindPropertyKey<T>>(
     field: TKey,
     options: { type?: SqliteTypeHint } = {},
   ) {
@@ -58,10 +58,10 @@ export class KindBuilder<T extends KindDefinition> {
   }
 
   createdAt<
-    TKey extends keyof KindValue<T> & string = DefaultManagedTimestampField<T, "createdAt">,
+    TKey extends KindPropertyKey<T> = DefaultManagedTimestampField<T, "createdAt">,
   >(
     ...args: DefaultManagedTimestampField<T, "createdAt"> extends never
-      ? [field: keyof KindValue<T> & string]
+      ? [field: KindPropertyKey<T>]
       : [field?: TKey]
   ) {
     const field = (args[0] ?? "createdAt") as TKey;
@@ -73,10 +73,10 @@ export class KindBuilder<T extends KindDefinition> {
   }
 
   updatedAt<
-    TKey extends keyof KindValue<T> & string = DefaultManagedTimestampField<T, "updatedAt">,
+    TKey extends KindPropertyKey<T> = DefaultManagedTimestampField<T, "updatedAt">,
   >(
     ...args: DefaultManagedTimestampField<T, "updatedAt"> extends never
-      ? [field: keyof KindValue<T> & string]
+      ? [field: KindPropertyKey<T>]
       : [field?: TKey]
   ) {
     const field = (args[0] ?? "updatedAt") as TKey;
@@ -106,7 +106,7 @@ export class KindBuilder<T extends KindDefinition> {
 
   migrate<const TVersion extends number>(
     version: TVersion,
-    steps: Record<number, KindMigration<z.output<T["schema"]>>>,
+    steps: Record<number, KindMigration<T>>,
   ) {
     if (!Number.isInteger(version) || version < 1) {
       throw new Error(`Kind "${this.tag}" version must be a positive integer.`);

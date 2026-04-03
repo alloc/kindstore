@@ -2,9 +2,14 @@
 
 ## 0.3.0
 
+Note: There is no supported migration path from 0.2.x to 0.3.x.
+
 - Added `collection.create(value)` as a one-step helper that allocates a fresh tagged ID and persists the document.
 - Breaking: reserved `id` as a store-owned document field, removed it from application payload schemas, and now include it in typed read and write results.
 - Breaking: renamed the internal document storage column to `data`, reserved `data` in document schemas, and use `RowData` as the internal term for persisted document bodies.
+- Breaking: renamed the typed document result helper to `KindOutput`, renamed the input helper to `KindInput`, and now use `z.output<T["schema"]>` directly where the raw schema output is needed.
+- Added `KindPropertyKey<T>` as the shared property-key alias for a kind's inferred output shape.
+- Changed `KindMigration<T>` to take a `KindDefinition` type parameter directly instead of a plain object type.
 
 ## 0.2.1
 
