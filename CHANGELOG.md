@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.3
+
+- Fixed exported inferred `kindstore(...)` values to keep `.createdAt()` and `.updatedAt()` type state out of downstream declaration emit, avoiding `TS4023` and inaccessible `unique symbol` errors.
+
 ## 0.3.2
 
 - Fixed `.createdAt()` and `.updatedAt()` to extend the kind schema with integer timestamp fields when they are missing, while keeping those fields store-managed.

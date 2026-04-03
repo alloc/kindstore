@@ -7,9 +7,7 @@ import type {
   KindManagedUpdatedAt,
   KindMigration,
   KindPropertyKey,
-  ManagedTimestampState,
   SqliteTypeHint,
-  managedTimestampFieldsSymbol,
 } from "./types";
 
 type MultiIndexFields<T extends KindDefinition> = {
@@ -38,15 +36,17 @@ type ExtendKindSchema<T extends KindDefinition, TKey extends string> = Omit<T, "
 
 type SetManagedCreatedAt<T extends KindDefinition, TKey extends string> = Omit<
   ExtendKindSchema<T, TKey>,
-  typeof managedTimestampFieldsSymbol
-> &
-  ManagedTimestampState<TKey, KindManagedUpdatedAt<T>>;
+  "createdAtField"
+> & {
+  createdAtField: TKey;
+};
 
 type SetManagedUpdatedAt<T extends KindDefinition, TKey extends string> = Omit<
   ExtendKindSchema<T, TKey>,
-  typeof managedTimestampFieldsSymbol
-> &
-  ManagedTimestampState<KindManagedCreatedAt<T>, TKey>;
+  "updatedAtField"
+> & {
+  updatedAtField: TKey;
+};
 
 export class KindBuilder<T extends KindDefinition> {
   readonly tag: T["tag"];
@@ -147,5 +147,7 @@ export function kind<const TTag extends string, const TSchema extends z.ZodObjec
     schema: TSchema;
     indexed: never;
     version: 1;
+    createdAtField: never;
+    updatedAtField: never;
   }>(tag, schema, 1);
 }
