@@ -62,6 +62,17 @@ const firstPage = db.posts.findPage({
 });
 ```
 
+That example covers the happy path, but kindstore also supports:
+
+- full-document replacement and targeted updates with `get()`, `put()`, `update()`, and `delete()` in the same typed collection API
+- lazy query iteration with `iterate()` when you want incremental processing instead of materializing every result
+- compound indexes with `.multi(...)` for query shapes like `status + updatedAt`
+- typed store-level metadata via `db.metadata`
+- atomic multi-write workflows with `db.batch(...)`
+- raw SQLite access through `db.raw` when you need an escape hatch
+- eager payload migrations with kind-level `.migrate(version, steps)`
+- explicit structural migrations for renames, drops, and tag changes with top-level `migrate(...)`
+
 Next:
 
 - Start with the intermediate guides in [docs/course/README.md](./docs/course/README.md)
