@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.4
+
+- Flattened downstream declaration output for `KindInput`, `KindOutput`, and related public types by using an internal erased `Omit` helper instead of exposing the built-in `Omit<...>` wrapper in inspected types.
+
 ## 0.3.3
 
 - Fixed exported inferred `kindstore(...)` values to keep `.createdAt()` and `.updatedAt()` type state out of downstream declaration emit, avoiding `TS4023` and inaccessible `unique symbol` errors.

@@ -7,6 +7,7 @@ import type {
   KindManagedUpdatedAt,
   KindMigration,
   KindPropertyKey,
+  Omit,
   SqliteTypeHint,
 } from "./types";
 
