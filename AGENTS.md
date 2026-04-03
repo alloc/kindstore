@@ -4,6 +4,7 @@ Repository-specific instructions for `/Users/alec/dev/alloc/kindstore`:
 
 - When fixing a code-level bug, add an entry to `CHANGELOG.md`.
 - When adding a new user-facing feature, add an entry to `CHANGELOG.md`.
+- Before updating `CHANGELOG.md`, check the latest package version with `cat package.json | jq '.version'` and base the next implied version on that result so unreleased entries stay grouped under the correct upcoming release.
 
 For `CHANGELOG.md` entries, determine the next implied version according to these rules:
 
