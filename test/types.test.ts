@@ -3,13 +3,13 @@ import { z } from "zod";
 
 import { kindstore } from "../src/index";
 import { kind } from "../src/kind";
-import type { KindDefinition } from "../src/kind";
+import type { KindBuilder } from "../src/kind";
 import type {
   DatabaseOptions,
   FindManyOptions,
   FindPageOptions,
   FindPageResult,
-  KindDefinitionBag,
+  KindDefinition,
   KindId,
   KindInputValue,
   KindPageCursor,
@@ -39,7 +39,7 @@ test("type-level validation of core primitives", () => {
     .updatedAt("updatedAt");
 
   type UserBag =
-    typeof userKind extends KindDefinition<infer B extends KindDefinitionBag> ? B : never;
+    typeof userKind extends KindBuilder<infer B extends KindDefinition> ? B : never;
 
   // KindValue exactly matches the schema output
   expectTypeOf<KindValue<UserBag>>().toEqualTypeOf<{

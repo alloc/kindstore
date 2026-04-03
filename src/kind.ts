@@ -2,18 +2,18 @@ import { z } from "zod";
 
 import type {
   IndexDirection,
-  KindDefinitionBag,
+  KindDefinition,
   KindMigration,
   KindValue,
   SqliteTypeHint,
 } from "./types";
 
-type MultiIndexFields<T extends KindDefinitionBag> = {
+type MultiIndexFields<T extends KindDefinition> = {
   [K in keyof KindValue<T> & string]?: IndexDirection;
 };
 
 type DefaultManagedTimestampField<
-  T extends KindDefinitionBag,
+  T extends KindDefinition,
   TName extends "createdAt" | "updatedAt",
 > = Extract<TName, keyof KindValue<T> & string>;
 
@@ -28,7 +28,7 @@ type MultiIndexDefinition = {
   fields: readonly [string, IndexDirection][];
 };
 
-export class KindDefinition<T extends KindDefinitionBag> {
+export class KindBuilder<T extends KindDefinition> {
   readonly tag: T["tag"];
   readonly schema: T["schema"];
   version: T["version"];
@@ -54,7 +54,7 @@ export class KindDefinition<T extends KindDefinitionBag> {
       single: true,
       type: options.type ?? current?.type,
     });
-    return this as unknown as KindDefinition<Omit<T, "indexed"> & { indexed: T["indexed"] | TKey }>;
+    return this as unknown as KindBuilder<Omit<T, "indexed"> & { indexed: T["indexed"] | TKey }>;
   }
 
   createdAt<
@@ -69,7 +69,7 @@ export class KindDefinition<T extends KindDefinitionBag> {
       throw new Error(`Kind "${this.tag}" cannot use "${field}" for both createdAt and updatedAt.`);
     }
     this.createdAtField = field as T["createdAt"];
-    return this as unknown as KindDefinition<Omit<T, "createdAt"> & { createdAt: TKey }>;
+    return this as unknown as KindBuilder<Omit<T, "createdAt"> & { createdAt: TKey }>;
   }
 
   updatedAt<
@@ -84,7 +84,7 @@ export class KindDefinition<T extends KindDefinitionBag> {
       throw new Error(`Kind "${this.tag}" cannot use "${field}" for both createdAt and updatedAt.`);
     }
     this.updatedAtField = field as T["updatedAt"];
-    return this as unknown as KindDefinition<Omit<T, "updatedAt"> & { updatedAt: TKey }>;
+    return this as unknown as KindBuilder<Omit<T, "updatedAt"> & { updatedAt: TKey }>;
   }
 
   multi<
@@ -99,7 +99,7 @@ export class KindDefinition<T extends KindDefinitionBag> {
       name,
       fields: entries,
     });
-    return this as unknown as KindDefinition<
+    return this as unknown as KindBuilder<
       Omit<T, "indexed"> & { indexed: T["indexed"] | (keyof TFields & string) }
     >;
   }
@@ -113,7 +113,7 @@ export class KindDefinition<T extends KindDefinitionBag> {
     }
     this.version = version as T["version"];
     this.migrations = steps;
-    return this as unknown as KindDefinition<Omit<T, "version"> & { version: TVersion }>;
+    return this as unknown as KindBuilder<Omit<T, "version"> & { version: TVersion }>;
   }
 }
 
@@ -121,7 +121,7 @@ export function kind<const TTag extends string, const TSchema extends z.ZodObjec
   tag: TTag,
   schema: TSchema,
 ) {
-  return new KindDefinition<{
+  return new KindBuilder<{
     tag: TTag;
     schema: TSchema;
     indexed: never;

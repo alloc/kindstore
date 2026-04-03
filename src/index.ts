@@ -1,4 +1,4 @@
-export { KindDefinition, kind } from "./kind";
+export { KindBuilder, kind } from "./kind";
 export { kindstore } from "./store";
 
 export type {
@@ -8,7 +8,7 @@ export type {
   FindPageResult,
   FindManyOptions,
   IndexDirection,
-  KindDefinitionBag,
+  KindDefinition,
   KindId,
   KindInputValue,
   KindIndexedField,

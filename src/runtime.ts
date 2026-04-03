@@ -1,14 +1,14 @@
 import { Database } from "bun:sqlite";
 import { monotonicFactory } from "ulid";
 
-import { KindDefinition } from "./kind";
+import { KindBuilder } from "./kind";
 import type {
   DatabaseOptions,
   FindManyOptions,
   FindPageOptions,
   FindPageResult,
   IndexDirection,
-  KindDefinitionBag,
+  KindDefinition,
   KindId,
   KindInputValue,
   KindMigrationContext,
@@ -61,13 +61,13 @@ type IndexColumn = {
   single: boolean;
 };
 
-type KindRuntimeDefinition<T extends KindDefinitionBag> = {
+type KindRuntimeDefinition<T extends KindDefinition> = {
   key: string;
   table: string;
   columns: Map<string, IndexColumn>;
   createdAtField?: T["createdAt"];
   updatedAtField?: T["updatedAt"];
-  definition: KindDefinition<T>;
+  definition: KindBuilder<T>;
 };
 
 type SnapshotIndex = {
@@ -121,7 +121,7 @@ type PageCursorPayload = {
   id: string;
 };
 
-type KindCollectionSurface<T extends KindDefinitionBag> = {
+export type KindCollection<T extends KindDefinition> = {
   newId(): KindId<T>;
   get(id: KindId<T>): KindValue<T> | undefined;
   put(id: KindId<T>, value: KindInputValue<T>): KindValue<T>;
@@ -136,7 +136,7 @@ type KindCollectionSurface<T extends KindDefinitionBag> = {
   iterate(options?: FindManyOptions<T>): IterableIterator<KindValue<T>>;
 };
 
-type MetadataSurface<T extends MetadataDefinitionMap> = {
+export type MetadataCollection<T extends MetadataDefinitionMap> = {
   get<K extends keyof T & string>(key: K): MetadataValue<T, K> | undefined;
   set<K extends keyof T & string>(key: K, value: MetadataValue<T, K>): MetadataValue<T, K>;
   delete<K extends keyof T & string>(key: K): boolean;
@@ -146,23 +146,16 @@ type MetadataSurface<T extends MetadataDefinitionMap> = {
   ): MetadataValue<T, K>;
 };
 
-type KindStoreSurface<TKinds extends KindRegistry, TMetadata extends MetadataDefinitionMap> = {
+export type Kindstore<TKinds extends KindRegistry, TMetadata extends MetadataDefinitionMap> = {
   readonly raw: Database;
-  readonly metadata: MetadataSurface<TMetadata>;
+  readonly metadata: MetadataCollection<TMetadata>;
   batch<TResult>(callback: () => TResult): TResult;
   close(): void;
 } & {
-  [K in keyof TKinds]: TKinds[K] extends KindDefinition<infer TBag>
-    ? KindCollectionSurface<TBag>
+  [K in keyof TKinds]: TKinds[K] extends KindBuilder<infer TBag>
+    ? KindCollection<TBag>
     : never;
 };
-
-export type KindCollection<T extends KindDefinitionBag> = KindCollectionSurface<T>;
-export type MetadataCollection<T extends MetadataDefinitionMap> = MetadataSurface<T>;
-export type Kindstore<
-  TKinds extends KindRegistry,
-  TMetadata extends MetadataDefinitionMap,
-> = KindStoreSurface<TKinds, TMetadata>;
 
 export function createStore<TKinds extends KindRegistry, TMetadata extends MetadataDefinitionMap>(
   filename: string,
@@ -424,7 +417,7 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
     };
   }
 
-  private renameKind<T extends KindDefinitionBag>(
+  private renameKind<T extends KindDefinition>(
     previousKey: string,
     previous: SnapshotKind,
     nextKey: string,
@@ -461,7 +454,7 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
     this.internal.deleteKindVersion(previousKey);
   }
 
-  private retagKindIfNeeded<T extends KindDefinitionBag>(
+  private retagKindIfNeeded<T extends KindDefinition>(
     key: string,
     previous: SnapshotKind,
     current: KindRuntimeDefinition<T>,
@@ -491,7 +484,7 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
     return true;
   }
 
-  private ensureKindTable<T extends KindDefinitionBag>(definition: KindRuntimeDefinition<T>) {
+  private ensureKindTable<T extends KindDefinition>(definition: KindRuntimeDefinition<T>) {
     this.database.run(
       `CREATE TABLE IF NOT EXISTS ${quoteIdentifier(definition.table)} (
         "id" TEXT PRIMARY KEY NOT NULL,
@@ -500,7 +493,7 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
     );
   }
 
-  private ensureGeneratedColumns<T extends KindDefinitionBag>(
+  private ensureGeneratedColumns<T extends KindDefinition>(
     definition: KindRuntimeDefinition<T>,
   ) {
     const existing = new Set(
@@ -520,7 +513,7 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
     }
   }
 
-  private reconcileIndexes<T extends KindDefinitionBag>(
+  private reconcileIndexes<T extends KindDefinition>(
     definition: KindRuntimeDefinition<T>,
     previous: SnapshotKind | undefined,
   ) {
@@ -541,7 +534,7 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
     }
   }
 
-  private dropStaleGeneratedColumns<T extends KindDefinitionBag>(
+  private dropStaleGeneratedColumns<T extends KindDefinition>(
     definition: KindRuntimeDefinition<T>,
     previous: SnapshotKind | undefined,
   ) {
@@ -579,7 +572,7 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
     };
   }
 
-  private migrateKind<T extends KindDefinitionBag>(definition: KindRuntimeDefinition<T>) {
+  private migrateKind<T extends KindDefinition>(definition: KindRuntimeDefinition<T>) {
     const version = this.internal.getKindVersion(definition.key);
     if (version == null) {
       this.internal.setKindVersion(definition.key, definition.definition.version);
@@ -637,7 +630,7 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
   }
 }
 
-class KindCollectionRuntime<T extends KindDefinitionBag> implements KindCollectionSurface<T> {
+class KindCollectionRuntime<T extends KindDefinition> implements KindCollection<T> {
   readonly database: Database;
   readonly definition: KindRuntimeDefinition<T>;
   readonly getStatement;
@@ -791,7 +784,7 @@ class KindCollectionRuntime<T extends KindDefinitionBag> implements KindCollecti
   }
 }
 
-class MetadataRuntime<T extends MetadataDefinitionMap> implements MetadataSurface<T> {
+class MetadataRuntime<T extends MetadataDefinitionMap> implements MetadataCollection<T> {
   readonly database: Database;
   readonly definitions: T;
   readonly getStatement;
@@ -1091,7 +1084,7 @@ function normalizeKinds<TKinds extends KindRegistry>(kinds: TKinds) {
   const seenTags = new Set<string>();
   const seenTables = new Set<string>();
   for (const [key, value] of Object.entries(kinds)) {
-    if (!(value instanceof KindDefinition)) {
+    if (!(value instanceof KindBuilder)) {
       throw new Error(`Property "${key}" is not a kind definition.`);
     }
     if (RESERVED_STORE_KEYS.has(key)) {
@@ -1126,7 +1119,7 @@ function normalizeKinds<TKinds extends KindRegistry>(kinds: TKinds) {
   return definitions;
 }
 
-function normalizeColumns<T extends KindDefinitionBag>(definition: KindDefinition<T>) {
+function normalizeColumns<T extends KindDefinition>(definition: KindBuilder<T>) {
   const shape = definition.schema.shape as Record<string, unknown>;
   const columns = new Map<string, IndexColumn>();
   const seenColumns = new Set<string>();
@@ -1176,8 +1169,8 @@ function assertTopLevelField(tag: string, shape: Record<string, unknown>, field:
   }
 }
 
-function validateManagedTimestampField<T extends KindDefinitionBag>(
-  definition: KindDefinition<T>,
+function validateManagedTimestampField<T extends KindDefinition>(
+  definition: KindBuilder<T>,
   shape: Record<string, unknown>,
   field: string | undefined,
   name: "createdAt" | "updatedAt",
@@ -1219,7 +1212,7 @@ function inferSqliteType(schema: any, tag: string, field: string): SqliteTypeHin
   }
 }
 
-function compileWhere<T extends KindDefinitionBag>(
+function compileWhere<T extends KindDefinition>(
   columns: Map<string, IndexColumn>,
   where: KindWhere<T> | undefined,
 ): CompiledQuery {
@@ -1327,7 +1320,7 @@ function compileOrderBy(orderBy: ResolvedOrderByEntry[], includeIdTieBreaker = f
   return ` ORDER BY ${parts.join(", ")}`;
 }
 
-function compilePageAfter<T extends KindDefinitionBag>(
+function compilePageAfter<T extends KindDefinition>(
   definition: KindRuntimeDefinition<T>,
   orderBy: ResolvedOrderByEntry[],
   after: KindPageCursor<T> | undefined,
@@ -1403,7 +1396,7 @@ function compilePageAfter<T extends KindDefinitionBag>(
   };
 }
 
-function encodePageCursor<T extends KindDefinitionBag>(
+function encodePageCursor<T extends KindDefinition>(
   definition: KindRuntimeDefinition<T>,
   orderBy: ResolvedOrderByEntry[],
   row: StoredRow,
@@ -1471,7 +1464,7 @@ function columnName(field: string) {
   return RESERVED_COLUMN_NAMES.has(column) ? `doc_${column}` : column;
 }
 
-function snapshotKind<T extends KindDefinitionBag>(
+function snapshotKind<T extends KindDefinition>(
   definition: KindRuntimeDefinition<T>,
 ): SnapshotKind {
   const columns: SnapshotKind["columns"] = {};
@@ -1492,7 +1485,7 @@ function snapshotKind<T extends KindDefinitionBag>(
   };
 }
 
-function snapshotIndexes<T extends KindDefinitionBag>(definition: KindRuntimeDefinition<T>) {
+function snapshotIndexes<T extends KindDefinition>(definition: KindRuntimeDefinition<T>) {
   const indexes: Record<string, SnapshotIndex> = {};
   for (const column of definition.columns.values()) {
     if (!column.single) {
@@ -1517,7 +1510,7 @@ function snapshotIndexes<T extends KindDefinitionBag>(definition: KindRuntimeDef
   return indexes;
 }
 
-function applyManagedTimestamps<T extends KindDefinitionBag>(
+function applyManagedTimestamps<T extends KindDefinition>(
   definition: KindRuntimeDefinition<T>,
   value: Record<string, unknown>,
   current: Record<string, unknown> | undefined,

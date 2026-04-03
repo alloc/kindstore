@@ -1,7 +1,7 @@
 import type { DatabaseOptions } from "bun:sqlite";
 import type { z } from "zod";
 
-import type { KindDefinition } from "./kind";
+import type { KindBuilder } from "./kind";
 
 export type SqliteTypeHint = "text" | "integer" | "real" | "numeric";
 
@@ -11,7 +11,7 @@ export type TaggedId<Tag extends string> = `${Tag}_${string}` & {
   readonly __kindstoreTag?: Tag;
 };
 
-export type KindDefinitionBag = {
+export type KindDefinition = {
   tag: string;
   schema: z.ZodObject<any>;
   indexed: string;
@@ -20,22 +20,22 @@ export type KindDefinitionBag = {
   version: number;
 };
 
-export type KindValue<T extends KindDefinitionBag> = z.output<T["schema"]>;
+export type KindValue<T extends KindDefinition> = z.output<T["schema"]>;
 
-type KindManagedTimestampField<T extends KindDefinitionBag> = Extract<
+type KindManagedTimestampField<T extends KindDefinition> = Extract<
   T["createdAt"] | T["updatedAt"],
   keyof KindValue<T> & string
 >;
 
-export type KindInputValue<T extends KindDefinitionBag> = Omit<
+export type KindInputValue<T extends KindDefinition> = Omit<
   KindValue<T>,
   KindManagedTimestampField<T>
 > &
   Partial<Pick<KindValue<T>, KindManagedTimestampField<T>>>;
 
-export type KindId<T extends KindDefinitionBag> = TaggedId<T["tag"]>;
+export type KindId<T extends KindDefinition> = TaggedId<T["tag"]>;
 
-export type KindIndexedField<T extends KindDefinitionBag> = Extract<
+export type KindIndexedField<T extends KindDefinition> = Extract<
   T["indexed"],
   keyof KindValue<T> & string
 >;
@@ -50,32 +50,32 @@ export type FilterOperators<T> = {
 
 export type WhereOperand<T> = Exclude<T, undefined> | null | FilterOperators<T>;
 
-export type KindWhere<T extends KindDefinitionBag> = Partial<{
+export type KindWhere<T extends KindDefinition> = Partial<{
   [K in KindIndexedField<T>]: WhereOperand<KindValue<T>[K]>;
 }>;
 
-export type KindOrderBy<T extends KindDefinitionBag> = Partial<
+export type KindOrderBy<T extends KindDefinition> = Partial<
   Record<KindIndexedField<T>, IndexDirection>
 >;
 
-export type FindManyOptions<T extends KindDefinitionBag> = {
+export type FindManyOptions<T extends KindDefinition> = {
   where?: KindWhere<T>;
   orderBy?: KindOrderBy<T>;
   limit?: number;
 };
 
-export type KindPageCursor<T extends KindDefinitionBag> = string & {
+export type KindPageCursor<T extends KindDefinition> = string & {
   readonly __kindstorePageCursor?: T["tag"];
 };
 
-export type FindPageOptions<T extends KindDefinitionBag> = {
+export type FindPageOptions<T extends KindDefinition> = {
   where?: KindWhere<T>;
   orderBy: KindOrderBy<T>;
   limit: number;
   after?: KindPageCursor<T>;
 };
 
-export type FindPageResult<T extends KindDefinitionBag> = {
+export type FindPageResult<T extends KindDefinition> = {
   items: KindValue<T>[];
   next?: KindPageCursor<T>;
 };
@@ -109,4 +109,4 @@ export type MetadataValue<T extends MetadataDefinitionMap, K extends keyof T & s
   T[K]
 >;
 
-export type KindRegistry = Record<string, KindDefinition<any>>;
+export type KindRegistry = Record<string, KindBuilder<any>>;

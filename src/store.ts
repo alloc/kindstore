@@ -1,11 +1,10 @@
 import type { z } from "zod";
 
-import type { KindDefinition } from "./kind";
+import type { KindBuilder } from "./kind";
 import { createStore } from "./runtime";
 import type { Kindstore } from "./runtime";
 import type {
   DatabaseOptions,
-  KindDefinitionBag,
   KindRegistry,
   MetadataDefinitionMap,
   SchemaDefinition,
@@ -26,9 +25,9 @@ type Exact<TShape, TObject extends TShape> = TShape &
   Record<Exclude<keyof TObject, keyof TShape>, never>;
 
 type InferKinds<TKinds extends KindRegistry> = {
-  [K in keyof TKinds as TKinds[K] extends KindDefinition<any> ? K : never]: Extract<
+  [K in keyof TKinds as TKinds[K] extends KindBuilder<any> ? K : never]: Extract<
     TKinds[K],
-    KindDefinition<any>
+    KindBuilder<any>
   >;
 };
 
