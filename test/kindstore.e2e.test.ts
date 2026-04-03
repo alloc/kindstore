@@ -944,6 +944,123 @@ describe("kindstore", () => {
     initial.close();
   });
 
+  test("applies sequential schema migrations across passes and reopens cleanly once aligned", () => {
+    const filename = `file:kindstore-schema-sequence-${crypto.randomUUID()}?mode=memory&cache=shared`;
+    const Session = z.object({
+      userId: z.string(),
+    });
+    const User = z.object({
+      email: z.string(),
+    });
+    const Device = z.object({
+      serial: z.string(),
+    });
+    const initialSchema = {
+      sessions: kind("ses", Session).index("userId"),
+      users: kind("usr", User).index("email"),
+      devices: kind("dev", Device).index("serial"),
+    };
+    const retaggedSchema = {
+      ...initialSchema,
+      users: kind("per", User).index("email"),
+    };
+    const { devices: _droppedDevices, ...droppedSchema } = retaggedSchema;
+    const renamedSchema = {
+      users: droppedSchema.users,
+      authSessions: kind("ses", Session).index("userId"),
+    };
+
+    const initial = kindstore({
+      filename,
+      schema: initialSchema,
+    });
+    const sessionId = initial.sessions.newId();
+    const userId = initial.users.newId();
+    const deviceId = initial.devices.newId();
+    initial.sessions.put(sessionId, { userId: "usr_1" });
+    initial.users.put(userId, { email: "jane@example.com" });
+    initial.devices.put(deviceId, { serial: "dev-001" });
+    initial.close();
+
+    const retagged = kindstore({
+      filename,
+      migrate(m) {
+        m.retag("users", "usr");
+      },
+      schema: retaggedSchema,
+    });
+    const retaggedUserId = userId.replace("usr_", "per_");
+    expect(retagged.users.get(retaggedUserId as never)).toEqual({
+      email: "jane@example.com",
+    });
+    expect(retagged.sessions.get(sessionId)).toEqual({
+      userId: "usr_1",
+    });
+    expect(retagged.devices.get(deviceId)).toEqual({
+      serial: "dev-001",
+    });
+    retagged.close();
+
+    const dropped = kindstore({
+      filename,
+      migrate(m) {
+        m.drop("devices");
+      },
+      schema: droppedSchema,
+    });
+    expect(dropped.users.get(retaggedUserId as never)).toEqual({
+      email: "jane@example.com",
+    });
+    expect(dropped.sessions.get(sessionId)).toEqual({
+      userId: "usr_1",
+    });
+    expect(
+      dropped.raw
+        .query(`SELECT "name" FROM "sqlite_master" WHERE "type" = 'table' AND "name" = 'devices'`)
+        .all(),
+    ).toEqual([]);
+    dropped.close();
+
+    const renamed = kindstore({
+      filename,
+      migrate(m) {
+        m.rename("sessions", "authSessions");
+      },
+      schema: renamedSchema,
+    });
+    expect(renamed.authSessions.get(sessionId as never)).toEqual({
+      userId: "usr_1",
+    });
+    expect(renamed.users.get(retaggedUserId as never)).toEqual({
+      email: "jane@example.com",
+    });
+    expect(
+      renamed.raw
+        .query(`SELECT "payload" FROM "__kindstore_internal" WHERE "key" = 'kind_versions'`)
+        .get(),
+    ).toEqual({ payload: '{"users":1,"authSessions":1}' });
+    renamed.close();
+
+    const reopened = kindstore({
+      filename,
+      schema: renamedSchema,
+    });
+    expect(reopened.authSessions.get(sessionId as never)).toEqual({
+      userId: "usr_1",
+    });
+    expect(reopened.users.get(retaggedUserId as never)).toEqual({
+      email: "jane@example.com",
+    });
+    expect(
+      reopened.raw
+        .query(`SELECT "payload" FROM "__kindstore_internal" WHERE "key" = 'schema_snapshot'`)
+        .get(),
+    ).toEqual({
+      payload: expect.stringContaining('"authSessions"'),
+    });
+    reopened.close();
+  });
+
   test("rolls back failed schema reconciliation without mutating the existing store", () => {
     const filename = `file:kindstore-rollback-schema-${crypto.randomUUID()}?mode=memory&cache=shared`;
     const Session = z.object({
