@@ -53,6 +53,9 @@ db.metadata.update("preferences", (current) => ({
 }));
 ```
 
+Here `lastOpenedAt` is just part of the metadata payload. kindstore does not
+maintain metadata timestamps unless your app stores them explicitly.
+
 Use metadata for small store-scoped values such as:
 
 - preferences

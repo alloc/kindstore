@@ -259,6 +259,9 @@ db.metadata.update("syncCursor", (current) => ({
 }));
 ```
 
+Here `syncedAt` is just an ordinary metadata field in the payload. kindstore
+does not add or maintain metadata timestamps for you.
+
 Use metadata for small typed values like preferences, checkpoints, cursors, or
 feature flags. kindstore does not add store-managed metadata timestamps, so if
 you need them, include them in the metadata schema yourself. If the value needs
