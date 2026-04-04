@@ -112,10 +112,10 @@ export class KindBuilder<T extends KindDefinition> {
     return this as unknown as KindBuilder<SetManagedUpdatedAt<T, TKey>>;
   }
 
-  multi<
-    const TName extends string,
-    const TFields extends MultiIndexFields<T>,
-  >(name: TName, fields: ExactFieldKeys<TFields, KindPropertyKey<T>>) {
+  multi<const TName extends string, const TFields extends MultiIndexFields<T>>(
+    name: TName,
+    fields: ExactFieldKeys<TFields, KindPropertyKey<T>>,
+  ) {
     const entries = Object.entries(fields) as [string, IndexDirection][];
     if (!entries.length) {
       throw new Error(`Multi-index "${name}" must include at least one field.`);

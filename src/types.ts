@@ -25,12 +25,13 @@ export type KindDefinition = {
 
 type KindLike = KindDefinition | KindBuilder<any>;
 
-type ResolveKindDefinition<T extends KindLike> = T extends KindBuilder<infer B extends KindDefinition>
-  ? B
-  : T;
+type ResolveKindDefinition<T extends KindLike> =
+  T extends KindBuilder<infer B extends KindDefinition> ? B : T;
 
-export type KindPropertyKey<T extends KindLike> =
-  keyof z.input<ResolveKindDefinition<T>["schema"]> & string;
+export type KindPropertyKey<T extends KindLike> = keyof z.input<
+  ResolveKindDefinition<T>["schema"]
+> &
+  string;
 
 export type KindManagedCreatedAt<T extends KindLike> = Extract<
   ResolveKindDefinition<T>["createdAtField"],

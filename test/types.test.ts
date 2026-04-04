@@ -2,8 +2,8 @@ import { expectTypeOf, test } from "bun:test";
 import { z } from "zod";
 
 import { kindstore } from "../src/index";
-import { kind } from "../src/kind";
 import type { KindBuilder } from "../src/kind";
+import { kind } from "../src/kind";
 import type {
   DatabaseOptions,
   FindManyOptions,
@@ -131,9 +131,8 @@ test("type-level validation of multi-only query fields", () => {
     updatedAt: "desc",
   });
 
-  type ActivityBag = typeof activityKind extends KindBuilder<infer B extends KindDefinition>
-    ? B
-    : never;
+  type ActivityBag =
+    typeof activityKind extends KindBuilder<infer B extends KindDefinition> ? B : never;
 
   expectTypeOf<KindWhere<ActivityBag>>().toEqualTypeOf<
     Partial<{
