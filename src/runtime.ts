@@ -753,26 +753,67 @@ class KindCollectionRuntime<T extends KindDefinition> implements KindCollection<
   }
 }
 
-class MetadataRuntime<T extends MetadataDefinitionMap> implements MetadataCollection<T> {
+class MetadataTableRuntime {
   readonly database: Database;
-  readonly definitions: T;
+  readonly manageCreatedAt: boolean;
   readonly getStatement;
   readonly setStatement;
   readonly deleteStatement;
+  readonly keysStatement;
+
+  constructor(database: Database, table: string, options: { manageCreatedAt: boolean }) {
+    this.database = database;
+    this.manageCreatedAt = options.manageCreatedAt;
+    this.getStatement = database.query(
+      `SELECT "payload" FROM ${quoteIdentifier(table)} WHERE "key" = ?`,
+    );
+    this.setStatement = database.query(
+      options.manageCreatedAt
+        ? `INSERT INTO ${quoteIdentifier(table)} ("key", "payload", "created_at", "updated_at") VALUES (?, ?, ?, ?)
+           ON CONFLICT("key") DO UPDATE SET "payload" = excluded."payload", "updated_at" = excluded."updated_at"`
+        : `INSERT INTO ${quoteIdentifier(table)} ("key", "payload", "updated_at") VALUES (?, ?, ?)
+           ON CONFLICT("key") DO UPDATE SET "payload" = excluded."payload", "updated_at" = excluded."updated_at"`,
+    );
+    this.deleteStatement = database.query(`DELETE FROM ${quoteIdentifier(table)} WHERE "key" = ?`);
+    this.keysStatement = database.query(
+      `SELECT "key" FROM ${quoteIdentifier(table)} ORDER BY "key" ASC`,
+    );
+  }
+
+  get(key: string) {
+    const row = this.getStatement.get(key) as { payload: string } | undefined;
+    return row ? parseRowData(row.payload) : undefined;
+  }
+
+  set(key: string, value: unknown) {
+    const now = Date.now();
+    if (this.manageCreatedAt) {
+      this.setStatement.run(key, JSON.stringify(value), now, now);
+      return;
+    }
+    this.setStatement.run(key, JSON.stringify(value), now);
+  }
+
+  delete(key: string) {
+    return this.deleteStatement.run(key).changes > 0;
+  }
+
+  keys() {
+    return (this.keysStatement.all() as { key: string }[]).map((row) => row.key);
+  }
+}
+
+class MetadataRuntime<T extends MetadataDefinitionMap> implements MetadataCollection<T> {
+  readonly database: Database;
+  readonly definitions: T;
+  readonly table: MetadataTableRuntime;
 
   constructor(database: Database, definitions: T) {
     this.database = database;
     this.definitions = definitions;
-    this.getStatement = database.query(
-      `SELECT "payload" FROM ${quoteIdentifier(APP_METADATA_TABLE)} WHERE "key" = ?`,
-    );
-    this.setStatement = database.query(
-      `INSERT INTO ${quoteIdentifier(APP_METADATA_TABLE)} ("key", "payload", "created_at", "updated_at") VALUES (?, ?, ?, ?)
-       ON CONFLICT("key") DO UPDATE SET "payload" = excluded."payload", "updated_at" = excluded."updated_at"`,
-    );
-    this.deleteStatement = database.query(
-      `DELETE FROM ${quoteIdentifier(APP_METADATA_TABLE)} WHERE "key" = ?`,
-    );
+    this.table = new MetadataTableRuntime(database, APP_METADATA_TABLE, {
+      manageCreatedAt: true,
+    });
   }
 
   get<K extends keyof T & string>(key: K) {
@@ -780,8 +821,8 @@ class MetadataRuntime<T extends MetadataDefinitionMap> implements MetadataCollec
     if (!schema) {
       throw new Error(`Metadata key "${key}" is not declared.`);
     }
-    const row = this.getStatement.get(key) as { payload: string } | undefined;
-    return row ? schema.parse(parseRowData(row.payload)) : undefined;
+    const value = this.table.get(key);
+    return value == null ? undefined : schema.parse(value);
   }
 
   set<K extends keyof T & string>(key: K, value: MetadataValue<T, K>) {
@@ -790,8 +831,7 @@ class MetadataRuntime<T extends MetadataDefinitionMap> implements MetadataCollec
       throw new Error(`Metadata key "${key}" is not declared.`);
     }
     const parsed = schema.parse(value);
-    const now = Date.now();
-    this.setStatement.run(key, JSON.stringify(parsed), now, now);
+    this.table.set(key, parsed);
     return parsed;
   }
 
@@ -799,7 +839,7 @@ class MetadataRuntime<T extends MetadataDefinitionMap> implements MetadataCollec
     if (!this.definitions[key]) {
       throw new Error(`Metadata key "${key}" is not declared.`);
     }
-    return this.deleteStatement.run(key).changes > 0;
+    return this.table.delete(key);
   }
 
   update<K extends keyof T & string>(
@@ -812,27 +852,17 @@ class MetadataRuntime<T extends MetadataDefinitionMap> implements MetadataCollec
 
 class InternalMetadataRuntime {
   readonly database: Database;
-  readonly getStatement;
-  readonly deleteStatement;
-  readonly setStatement;
+  readonly table: MetadataTableRuntime;
 
   constructor(database: Database) {
     this.database = database;
-    this.getStatement = database.query(
-      `SELECT "payload" FROM ${quoteIdentifier(INTERNAL_TABLE)} WHERE "key" = ?`,
-    );
-    this.deleteStatement = database.query(
-      `DELETE FROM ${quoteIdentifier(INTERNAL_TABLE)} WHERE "key" = ?`,
-    );
-    this.setStatement = database.query(
-      `INSERT INTO ${quoteIdentifier(INTERNAL_TABLE)} ("key", "payload", "updated_at") VALUES (?, ?, ?)
-       ON CONFLICT("key") DO UPDATE SET "payload" = excluded."payload", "updated_at" = excluded."updated_at"`,
-    );
+    this.table = new MetadataTableRuntime(database, INTERNAL_TABLE, {
+      manageCreatedAt: false,
+    });
   }
 
   get(key: string) {
-    const row = this.getStatement.get(key) as { payload: string } | undefined;
-    return row ? parseRowData(row.payload) : undefined;
+    return this.table.get(key);
   }
 
   getNumber(key: string) {
@@ -847,19 +877,15 @@ class InternalMetadataRuntime {
   }
 
   set(key: string, value: unknown) {
-    this.setStatement.run(key, JSON.stringify(value), Date.now());
+    this.table.set(key, value);
   }
 
   delete(key: string) {
-    this.deleteStatement.run(key);
+    this.table.delete(key);
   }
 
   keys() {
-    return (
-      this.database
-        .query(`SELECT "key" FROM ${quoteIdentifier(INTERNAL_TABLE)} ORDER BY "key" ASC`)
-        .all() as { key: string }[]
-    ).map((row) => row.key);
+    return this.table.keys();
   }
 
   getKindVersion(kind: string) {
