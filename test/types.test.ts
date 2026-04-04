@@ -152,6 +152,39 @@ test("type-level validation of multi-only query fields", () => {
   }
 });
 
+test("type-level validation of id in multi query fields", () => {
+  const activityKind = kind(
+    "act",
+    z.object({
+      userId: z.string(),
+      updatedAt: z.number().int(),
+    }),
+  ).multi("user_id", {
+    userId: "asc",
+    id: "asc",
+  });
+
+  type ActivityBag =
+    typeof activityKind extends KindBuilder<infer B extends KindDefinition> ? B : never;
+
+  expectTypeOf<KindWhere<ActivityBag>>().toEqualTypeOf<
+    Partial<{
+      userId: WhereOperand<string>;
+      id: WhereOperand<KindId<ActivityBag>>;
+    }>
+  >();
+  expectTypeOf<FindManyOptions<ActivityBag>>().toMatchTypeOf<{
+    where?: KindWhere<ActivityBag>;
+    orderBy?: { userId?: "asc" | "desc"; id?: "asc" | "desc" };
+    limit?: number;
+  }>();
+
+  if (false) {
+    // @ts-expect-error - ids stay tag-scoped
+    expectTypeOf<{ where: { id: "other_123" } }>().toMatchTypeOf<FindManyOptions<ActivityBag>>();
+  }
+});
+
 test("type-level validation of kindstore constructor", () => {
   const Task = z.object({
     title: z.string(),

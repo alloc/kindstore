@@ -33,6 +33,8 @@ export type KindPropertyKey<T extends KindLike> = keyof z.input<
 > &
   string;
 
+type KindIndexedKey<T extends KindLike> = KindPropertyKey<T> | "id";
+
 export type KindManagedCreatedAt<T extends KindLike> = Extract<
   ResolveKindDefinition<T>["createdAtField"],
   KindPropertyKey<T>
@@ -61,8 +63,12 @@ export type KindId<T extends KindLike> = TaggedId<ResolveKindDefinition<T>["tag"
 
 export type KindIndexedField<T extends KindLike> = Extract<
   ResolveKindDefinition<T>["indexed"],
-  KindPropertyKey<T>
+  KindIndexedKey<T>
 >;
+
+type KindFieldValue<T extends KindLike, K extends KindIndexedField<T>> = K extends "id"
+  ? KindId<T>
+  : z.output<ResolveKindDefinition<T>["schema"]>[K];
 
 export type FilterOperators<T> = {
   in?: readonly Exclude<T, undefined>[];
@@ -75,7 +81,7 @@ export type FilterOperators<T> = {
 export type WhereOperand<T> = Exclude<T, undefined> | null | FilterOperators<T>;
 
 export type KindWhere<T extends KindLike> = Partial<{
-  [K in KindIndexedField<T>]: WhereOperand<z.output<ResolveKindDefinition<T>["schema"]>[K]>;
+  [K in KindIndexedField<T>]: WhereOperand<KindFieldValue<T, K>>;
 }>;
 
 export type KindOrderBy<T extends KindLike> = Partial<Record<KindIndexedField<T>, IndexDirection>>;

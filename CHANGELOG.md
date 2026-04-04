@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.7
+
+- Fixed `.multi()` to allow `id` alongside payload fields so typed queries and composite indexes can include the store-managed document ID.
+
 ## 0.3.6
 
 - Added `db.schema`, which exposes the declared `KindBuilder` instances on the live `kindstore(...)` return value so downstream code can derive types like `KindInput<typeof db.schema.tasks>` directly from the store.

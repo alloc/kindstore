@@ -167,8 +167,8 @@ can optimize arbitrary document queries.
 ## Rules to internalize
 
 - Query only on fields you declared through `.index(...)` or `.multi(...)`,
-  because kindstore's typed query model is intentionally restricted to those
-  top-level fields.
+  plus `id` when you include it in `.multi(...)`, because kindstore's typed
+  query model is intentionally restricted to that declared surface.
 - Prefer `iterate()` when you want incremental processing. For example, it is a
   better fit than `findMany()` when you want to scan assigned tasks and stop
   once you find the first one that still needs follow-up.

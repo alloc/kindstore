@@ -405,6 +405,70 @@ describe("kindstore", () => {
     db.close();
   });
 
+  test("allows id as part of a multi index", () => {
+    const filename = `file:kindstore-multi-id-${crypto.randomUUID()}?mode=memory&cache=shared`;
+    const Session = z.object({
+      userId: z.string(),
+      updatedAt: z.number().int(),
+    });
+    const db = kindstore({
+      filename,
+      schema: {
+        sessions: kind("ses", Session).multi("user_id", {
+          userId: "asc",
+          id: "asc",
+        }),
+      },
+    });
+
+    const firstId = db.sessions.newId();
+    const secondId = db.sessions.newId();
+
+    db.sessions.put(firstId, {
+      userId: "usr_1",
+      updatedAt: 10,
+    });
+    db.sessions.put(secondId, {
+      userId: "usr_1",
+      updatedAt: 20,
+    });
+
+    expect(
+      db.sessions.findMany({
+        where: { userId: "usr_1", id: { gte: firstId } },
+        orderBy: { id: "asc" },
+      }),
+    ).toEqual([
+      {
+        id: firstId,
+        userId: "usr_1",
+        updatedAt: 10,
+      },
+      {
+        id: secondId,
+        userId: "usr_1",
+        updatedAt: 20,
+      },
+    ]);
+    expect(
+      (db.raw.query(`PRAGMA table_xinfo('sessions')`).all() as { name: string }[]).map(
+        (column) => column.name,
+      ),
+    ).toEqual(["id", "data", "user_id"]);
+    expect(
+      (
+        db.raw
+          .query(
+            `SELECT "name" FROM "sqlite_master" WHERE "type" = 'index' AND "tbl_name" = 'sessions' ORDER BY "name" ASC`,
+          )
+          .all() as { name: string }[]
+      )
+        .map((index) => index.name)
+        .filter((name) => !name.startsWith("sqlite_autoindex_")),
+    ).toEqual(["idx_sessions_user_id"]);
+    db.close();
+  });
+
   test("rejects invalid findPage usage", () => {
     const filename = `file:kindstore-find-page-errors-${crypto.randomUUID()}?mode=memory&cache=shared`;
     const Task = z.object({

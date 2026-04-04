@@ -12,7 +12,7 @@ import type {
 } from "./types";
 
 type MultiIndexFields<T extends KindDefinition> = {
-  [K in KindPropertyKey<T>]?: IndexDirection;
+  [K in KindPropertyKey<T> | "id"]?: IndexDirection;
 };
 
 type ExactFieldKeys<TValue, TAllowed extends PropertyKey> = TValue &
@@ -114,7 +114,7 @@ export class KindBuilder<T extends KindDefinition> {
 
   multi<const TName extends string, const TFields extends MultiIndexFields<T>>(
     name: TName,
-    fields: ExactFieldKeys<TFields, KindPropertyKey<T>>,
+    fields: ExactFieldKeys<TFields, KindPropertyKey<T> | "id">,
   ) {
     const entries = Object.entries(fields) as [string, IndexDirection][];
     if (!entries.length) {

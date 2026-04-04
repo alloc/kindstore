@@ -45,6 +45,7 @@ const STORE_FORMAT_VERSION_KEY = "store_format_version";
 const KIND_VERSIONS_KEY = "kind_versions";
 const SCHEMA_SNAPSHOT_KEY = "schema_snapshot";
 const RESERVED_STORE_KEYS = new Set(["batch", "close", "connection", "metadata", "raw", "schema"]);
+const RESERVED_ROW_COLUMNS = new Set(["id", "data"]);
 const nextUlid = monotonicFactory();
 const PAGE_CURSOR_VERSION = 1;
 
@@ -498,7 +499,11 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
       ).map((column) => column.name),
     );
     for (const column of Object.values(previous.columns)) {
-      if (currentColumns.has(column.column) || !existingColumns.has(column.column)) {
+      if (
+        RESERVED_ROW_COLUMNS.has(column.column) ||
+        currentColumns.has(column.column) ||
+        !existingColumns.has(column.column)
+      ) {
         continue;
       }
       this.database.run(
@@ -1112,6 +1117,16 @@ function normalizeColumns<T extends KindDefinition>(definition: KindBuilder<T>) 
   for (const multiIndex of definition.multiIndexes) {
     for (const [field] of multiIndex.fields) {
       if (columns.has(field)) {
+        continue;
+      }
+      if (field === "id") {
+        seenColumns.add("id");
+        columns.set(field, {
+          field,
+          column: "id",
+          single: false,
+          type: "text",
+        });
         continue;
       }
       assertTopLevelField(definition.tag, shape, field);
