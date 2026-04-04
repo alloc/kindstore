@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.0
+
+- Breaking: simplified application metadata storage by removing kindstore-managed `created_at` and `updated_at` columns. Apps that need metadata timestamps should store them in the metadata payload explicitly.
+
 ## 0.3.7
 
 - Fixed `.multi()` to allow `id` alongside payload fields so typed queries and composite indexes can include the store-managed document ID.

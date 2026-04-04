@@ -240,6 +240,7 @@ Its behavior mirrors the rest of the public API:
 - values are schema-validated
 - undeclared metadata keys are rejected
 - application metadata is distinct from library-owned bookkeeping
+- metadata entries do not get store-managed timestamps
 
 ## Batch semantics
 

@@ -185,6 +185,11 @@ describe("kindstore", () => {
       ]),
     );
     expect(
+      (db.raw.query(`PRAGMA table_xinfo('__kindstore_app_metadata')`).all() as { name: string }[]).map(
+        (column) => column.name,
+      ),
+    ).toEqual(["key", "payload"]);
+    expect(
       db.raw
         .query(`SELECT "payload" FROM "__kindstore_internal" WHERE "key" = 'store_format_version'`)
         .get(),

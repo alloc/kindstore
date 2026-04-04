@@ -260,8 +260,9 @@ db.metadata.update("syncCursor", (current) => ({
 ```
 
 Use metadata for small typed values like preferences, checkpoints, cursors, or
-feature flags. If the value needs many records, indexing, or per-record IDs,
-make it a real kind instead.
+feature flags. kindstore does not add store-managed metadata timestamps, so if
+you need them, include them in the metadata schema yourself. If the value needs
+many records, indexing, or per-record IDs, make it a real kind instead.
 
 ## Batch related writes together
 

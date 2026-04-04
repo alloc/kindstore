@@ -228,9 +228,7 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
       this.database.run(
         `CREATE TABLE IF NOT EXISTS ${quoteIdentifier(APP_METADATA_TABLE)} (
           "key" TEXT PRIMARY KEY NOT NULL,
-          "payload" TEXT NOT NULL,
-          "created_at" INTEGER NOT NULL,
-          "updated_at" INTEGER NOT NULL
+          "payload" TEXT NOT NULL
         ) STRICT`,
       );
       const previousSnapshot = this.applySchemaMigrations(this.internal.getSchemaSnapshot());
@@ -755,24 +753,24 @@ class KindCollectionRuntime<T extends KindDefinition> implements KindCollection<
 
 class MetadataTableRuntime {
   readonly database: Database;
-  readonly manageCreatedAt: boolean;
+  readonly manageUpdatedAt: boolean;
   readonly getStatement;
   readonly setStatement;
   readonly deleteStatement;
   readonly keysStatement;
 
-  constructor(database: Database, table: string, options: { manageCreatedAt: boolean }) {
+  constructor(database: Database, table: string, options: { manageUpdatedAt: boolean }) {
     this.database = database;
-    this.manageCreatedAt = options.manageCreatedAt;
+    this.manageUpdatedAt = options.manageUpdatedAt;
     this.getStatement = database.query(
       `SELECT "payload" FROM ${quoteIdentifier(table)} WHERE "key" = ?`,
     );
     this.setStatement = database.query(
-      options.manageCreatedAt
-        ? `INSERT INTO ${quoteIdentifier(table)} ("key", "payload", "created_at", "updated_at") VALUES (?, ?, ?, ?)
+      (options.manageUpdatedAt
+        ? `INSERT INTO ${quoteIdentifier(table)} ("key", "payload", "updated_at") VALUES (?, ?, ?)
            ON CONFLICT("key") DO UPDATE SET "payload" = excluded."payload", "updated_at" = excluded."updated_at"`
-        : `INSERT INTO ${quoteIdentifier(table)} ("key", "payload", "updated_at") VALUES (?, ?, ?)
-           ON CONFLICT("key") DO UPDATE SET "payload" = excluded."payload", "updated_at" = excluded."updated_at"`,
+        : `INSERT INTO ${quoteIdentifier(table)} ("key", "payload") VALUES (?, ?)
+           ON CONFLICT("key") DO UPDATE SET "payload" = excluded."payload"`),
     );
     this.deleteStatement = database.query(`DELETE FROM ${quoteIdentifier(table)} WHERE "key" = ?`);
     this.keysStatement = database.query(
@@ -787,11 +785,11 @@ class MetadataTableRuntime {
 
   set(key: string, value: unknown) {
     const now = Date.now();
-    if (this.manageCreatedAt) {
-      this.setStatement.run(key, JSON.stringify(value), now, now);
+    if (this.manageUpdatedAt) {
+      this.setStatement.run(key, JSON.stringify(value), now);
       return;
     }
-    this.setStatement.run(key, JSON.stringify(value), now);
+    this.setStatement.run(key, JSON.stringify(value));
   }
 
   delete(key: string) {
@@ -812,7 +810,7 @@ class MetadataRuntime<T extends MetadataDefinitionMap> implements MetadataCollec
     this.database = database;
     this.definitions = definitions;
     this.table = new MetadataTableRuntime(database, APP_METADATA_TABLE, {
-      manageCreatedAt: true,
+      manageUpdatedAt: false,
     });
   }
 
@@ -857,7 +855,7 @@ class InternalMetadataRuntime {
   constructor(database: Database) {
     this.database = database;
     this.table = new MetadataTableRuntime(database, INTERNAL_TABLE, {
-      manageCreatedAt: false,
+      manageUpdatedAt: true,
     });
   }
 

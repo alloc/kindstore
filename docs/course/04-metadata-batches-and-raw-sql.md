@@ -33,6 +33,10 @@ const db = kindstore({
 
 Application metadata is a typed key/value space owned by your app.
 
+kindstore does not add store-managed metadata timestamps. If you want metadata
+creation or update times, include them in the metadata schema and set them in
+your app code.
+
 ## Read and write metadata
 
 ```ts
