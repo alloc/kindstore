@@ -1,6 +1,6 @@
 {
   "name": "kindstore",
-  "version": "0.3.5",
+  "version": "0.3.6",
   "description": "A lightweight, typed document store on SQLite with Zod schemas, indexed queries, and explicit migrations.",
   "keywords": [
     "bun",
