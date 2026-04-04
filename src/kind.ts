@@ -15,6 +15,9 @@ type MultiIndexFields<T extends KindDefinition> = {
   [K in KindPropertyKey<T>]?: IndexDirection;
 };
 
+type ExactFieldKeys<TValue, TAllowed extends PropertyKey> = TValue &
+  Record<Exclude<keyof TValue, TAllowed>, never>;
+
 type IndexDefinition = {
   field: string;
   type?: SqliteTypeHint;
@@ -111,8 +114,8 @@ export class KindBuilder<T extends KindDefinition> {
 
   multi<
     const TName extends string,
-    const TFields extends MultiIndexFields<T> & Record<string, IndexDirection>,
-  >(name: TName, fields: TFields) {
+    const TFields extends MultiIndexFields<T>,
+  >(name: TName, fields: ExactFieldKeys<TFields, KindPropertyKey<T>>) {
     const entries = Object.entries(fields) as [string, IndexDirection][];
     if (!entries.length) {
       throw new Error(`Multi-index "${name}" must include at least one field.`);

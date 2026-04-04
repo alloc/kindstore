@@ -121,6 +121,12 @@ yet. For example, adding `.multi("status_updatedAt", { status: "asc",
 updatedAt: "desc" })` only makes sense if you actually expect queries like
 "show the most recently updated tasks with status `doing`."
 
+`.multi(...)` may reference any top-level schema field, even if you did not
+also declare a standalone `.index(...)` for that field. kindstore will derive
+the generated columns it needs automatically. Add `.index(...)` as well when
+you want a dedicated single-column SQLite index or need an explicit SQLite type
+hint.
+
 ## Put the kind into a store
 
 ```ts
@@ -146,9 +152,9 @@ storage identity used in document IDs.
 
 ## Rules to internalize
 
-- Index only top-level schema fields, because the typed query API is built
-  around declared top-level fields such as `status` or `updatedAt`, not nested
-  document paths.
+- Declare queryable fields only at the top level, whether through `.index(...)`
+  or `.multi(...)`, because the typed query API is built around top-level
+  fields such as `status` or `updatedAt`, not nested document paths.
 - Let kindstore infer SQLite types from supported Zod schemas when it can. For
   example, `z.number().int()` indexes as `integer`, so `.index("updatedAt")` is
   enough for timestamp queries. Add an explicit SQLite type hint only when

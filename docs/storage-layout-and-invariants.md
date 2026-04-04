@@ -62,7 +62,8 @@ kindstore supports arbitrary document-path indexing.
 The durable rules are:
 
 - undeclared fields are stored only in the document payload
-- declared indexed fields are eligible for derived query support
+- top-level fields declared through `.index(...)` or `.multi(...)` are eligible
+  for derived query support
 - query support is library-owned derived data, not application-owned state
 
 ## Managed payload timestamps
@@ -83,7 +84,7 @@ Maintainers should preserve these behaviors:
 - an automatic modification timestamp advances on each successful write and on
   library-driven rewrite paths such as eager payload migration
 - timestamp assignment policy is distinct from queryability, so a managed
-  timestamp field is only queryable if it was also declared as indexed
+  timestamp field is only queryable if it participates in an index declaration
 
 ## Tagged identity
 

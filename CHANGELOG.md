@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.5
+
+- Fixed `.multi()` to reject unknown field keys at the type boundary while still accepting any top-level schema key.
+- Clarified that multi-only fields automatically get the generated columns required for typed query support, without needing a separate single-field `.index(...)` declaration.
+
 ## 0.3.4
 
 - Flattened downstream declaration output for `KindInput`, `KindOutput`, and related public types by using an internal erased `Omit` helper instead of exposing the built-in `Omit<...>` wrapper in inspected types.

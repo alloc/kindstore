@@ -326,6 +326,61 @@ describe("kindstore", () => {
     db.close();
   });
 
+  test("allows multi-only query fields and derives their generated columns", () => {
+    const filename = `file:kindstore-multi-only-${crypto.randomUUID()}?mode=memory&cache=shared`;
+    const Session = z.object({
+      userId: z.string(),
+      updatedAt: z.number().int(),
+      status: z.enum(["active", "revoked"]),
+    });
+    const db = kindstore({
+      filename,
+      schema: {
+        sessions: kind("ses", Session).multi("user_updatedAt", {
+          userId: "asc",
+          updatedAt: "desc",
+        }),
+      },
+    });
+
+    db.sessions.put(db.sessions.newId(), {
+      userId: "usr_1",
+      updatedAt: 10,
+      status: "active",
+    });
+    db.sessions.put(db.sessions.newId(), {
+      userId: "usr_1",
+      updatedAt: 20,
+      status: "revoked",
+    });
+
+    expect(
+      db.sessions
+        .findMany({
+          where: { userId: "usr_1" },
+          orderBy: { updatedAt: "desc" },
+        })
+        .map((session) => session.updatedAt),
+    ).toEqual([20, 10]);
+    expect(
+      (db.raw.query(`PRAGMA table_xinfo('sessions')`).all() as { name: string }[]).map(
+        (column) => column.name,
+      ),
+    ).toEqual(["id", "data", "user_id", "updated_at"]);
+    expect(
+      (
+        db.raw
+          .query(
+            `SELECT "name" FROM "sqlite_master" WHERE "type" = 'index' AND "tbl_name" = 'sessions' ORDER BY "name" ASC`,
+          )
+          .all() as { name: string }[]
+      )
+        .map((index) => index.name)
+        .filter((name) => !name.startsWith("sqlite_autoindex_")),
+    ).toEqual(["idx_sessions_user_updated_at"]);
+    db.close();
+  });
+
   test("rejects invalid findPage usage", () => {
     const filename = `file:kindstore-find-page-errors-${crypto.randomUUID()}?mode=memory&cache=shared`;
     const Task = z.object({

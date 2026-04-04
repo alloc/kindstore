@@ -170,8 +170,8 @@ It does not support:
 
 ## Indexed-field restriction
 
-Typed filtering and ordering only apply to fields that were explicitly declared
-as queryable in the kind definition.
+Typed filtering and ordering only apply to top-level fields that were
+explicitly declared through `.index(...)` or included in `.multi(...)`.
 
 That restriction is part of the contract, not an incidental limitation.
 
@@ -216,7 +216,8 @@ The durable contract is:
 - automatic timestamp assignment is declared on the kind, not inferred from the
   field name
 - the managed field still lives in the payload schema and read results
-- a managed field is only queryable when it is also declared as indexed
+- a managed field is only queryable when it participates in an index
+  declaration such as `.index(...)` or `.multi(...)`
 - caller-provided values for managed timestamp fields do not override the
   library's assignment policy
 

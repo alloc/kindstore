@@ -61,6 +61,12 @@ Use this shape when you need:
 - typed filtering on declared top-level fields only
 - deterministic ordering on indexed fields
 
+`.multi(...)` may reference any top-level schema field, even if that field does
+not also have its own `.index(...)`. kindstore will derive the generated
+columns it needs automatically. Add a standalone `.index(...)` too when you
+want a dedicated single-field SQLite index or need an explicit SQLite type
+hint.
+
 When a kind uses `.createdAt()` or `.updatedAt()`, kindstore adds integer
 timestamp fields to the schema if they are missing. If the field already exists
 in the Zod object, keep it as an integer timestamp field.
@@ -182,8 +188,8 @@ where: {
 
 Keep queries inside this boundary:
 
-- only declared indexed top-level fields are queryable
-- ordering is only on declared indexed fields
+- only top-level fields declared in `.index(...)` or `.multi(...)` are queryable
+- ordering is only on fields declared in `.index(...)` or `.multi(...)`
 - the operators are `in`, `gt`, `gte`, `lt`, and `lte`
 - there is no arbitrary boolean composition or join support
 

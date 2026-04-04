@@ -118,6 +118,41 @@ test("type-level validation of core primitives", () => {
   expectTypeOf<MetadataValue<typeof metadataMap, "features">>().toBeArray();
 });
 
+test("type-level validation of multi-only query fields", () => {
+  const activityKind = kind(
+    "act",
+    z.object({
+      userId: z.string(),
+      updatedAt: z.number().int(),
+      status: z.enum(["active", "inactive"]),
+    }),
+  ).multi("user_updatedAt", {
+    userId: "asc",
+    updatedAt: "desc",
+  });
+
+  type ActivityBag = typeof activityKind extends KindBuilder<infer B extends KindDefinition>
+    ? B
+    : never;
+
+  expectTypeOf<KindWhere<ActivityBag>>().toEqualTypeOf<
+    Partial<{
+      userId: WhereOperand<string>;
+      updatedAt: WhereOperand<number>;
+    }>
+  >();
+  expectTypeOf<FindManyOptions<ActivityBag>>().toMatchTypeOf<{
+    where?: KindWhere<ActivityBag>;
+    orderBy?: { userId?: "asc" | "desc"; updatedAt?: "asc" | "desc" };
+    limit?: number;
+  }>();
+
+  if (false) {
+    // @ts-expect-error - 'missingField' is not in the schema
+    kind("act", z.object({ userId: z.string() })).multi("bad", { missingField: "asc" });
+  }
+});
+
 test("type-level validation of kindstore constructor", () => {
   const Task = z.object({
     title: z.string(),

@@ -33,7 +33,8 @@ const db = kindstore({
 });
 ```
 
-Only declared queryable fields participate in typed filtering and ordering.
+Only top-level fields declared in `.index(...)` or `.multi(...)` participate in
+typed filtering and ordering.
 
 ## Use `findMany()` for eager result sets
 
@@ -165,8 +166,9 @@ can optimize arbitrary document queries.
 
 ## Rules to internalize
 
-- Query only on fields you declared as queryable, because kindstore's typed
-  query model is intentionally restricted to those fields.
+- Query only on fields you declared through `.index(...)` or `.multi(...)`,
+  because kindstore's typed query model is intentionally restricted to those
+  top-level fields.
 - Prefer `iterate()` when you want incremental processing. For example, it is a
   better fit than `findMany()` when you want to scan assigned tasks and stop
   once you find the first one that still needs follow-up.
