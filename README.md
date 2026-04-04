@@ -19,7 +19,12 @@ npx skills add alloc/kindstore
 
 ```ts
 import { z } from "zod";
-import { kind, kindstore } from "kindstore";
+import {
+  kind,
+  kindstore,
+  type KindInput,
+  type KindOutput,
+} from "kindstore";
 
 const Post = z.object({
   authorId: z.string(),
@@ -59,6 +64,9 @@ const firstPage = db.posts.findPage({
   orderBy: { updatedAt: "desc" },
   limit: 20,
 });
+
+type PostInput = KindInput<typeof db.schema.posts>;
+type PostOutput = KindOutput<typeof db.schema.posts>;
 ```
 
 That example covers the happy path, but kindstore also supports:
@@ -67,6 +75,7 @@ That example covers the happy path, but kindstore also supports:
 - full-document replacement and targeted updates with `get()`, `put()`, `update()`, and `delete()` in the same typed collection API
 - lazy query iteration with `iterate()` when you want incremental processing instead of materializing every result
 - compound indexes with `.multi(...)` for query shapes like `status + updatedAt`
+- access to the declared kind builders through `db.schema`
 - typed store-level metadata via `db.metadata`
 - atomic multi-write workflows with `db.batch(...)`
 - raw SQLite access through `db.raw` when you need an escape hatch

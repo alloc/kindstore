@@ -54,6 +54,11 @@ type TaskInput = KindInput<typeof schema.tasks>;
 type TaskOutput = KindOutput<typeof schema.tasks>;
 ```
 
+When you already have a store instance, the same builders are also available at
+`db.schema.<kindKey>`, so `KindInput<typeof db.schema.tasks>` and
+`KindOutput<typeof db.schema.tasks>` work without keeping a separate schema bag
+in scope.
+
 Use this shape when you need:
 
 - stable tagged IDs like `tsk_...`

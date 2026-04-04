@@ -44,7 +44,7 @@ const APP_METADATA_TABLE = "__kindstore_app_metadata";
 const STORE_FORMAT_VERSION_KEY = "store_format_version";
 const KIND_VERSIONS_KEY = "kind_versions";
 const SCHEMA_SNAPSHOT_KEY = "schema_snapshot";
-const RESERVED_STORE_KEYS = new Set(["batch", "close", "connection", "metadata", "raw"]);
+const RESERVED_STORE_KEYS = new Set(["batch", "close", "connection", "metadata", "raw", "schema"]);
 const nextUlid = monotonicFactory();
 const PAGE_CURSOR_VERSION = 1;
 
@@ -148,6 +148,7 @@ export type MetadataCollection<T extends MetadataDefinitionMap> = {
 
 export type Kindstore<TKinds extends KindRegistry, TMetadata extends MetadataDefinitionMap> = {
   readonly raw: Database;
+  readonly schema: TKinds;
   readonly metadata: MetadataCollection<TMetadata>;
   batch<TResult>(callback: () => TResult): TResult;
   close(): void;
@@ -166,6 +167,7 @@ export function createStore<TKinds extends KindRegistry, TMetadata extends Metad
   try {
     const runtime = new KindstoreRuntime<TMetadata>(
       database,
+      kinds,
       normalizeKinds(kinds),
       metadataDefinitions,
       normalizeSchemaPlan(schemaDefinition),
@@ -187,6 +189,7 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
 
   constructor(
     database: Database,
+    declaredKinds: KindRegistry,
     kinds: Map<string, KindRuntimeDefinition<any>>,
     metadataDefinitions: TMetadata,
     schemaPlan: SchemaPlan,
@@ -200,6 +203,7 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
     this.bootstrap();
     this.metadata = new MetadataRuntime(database, metadataDefinitions);
     this.publicStore.raw = database;
+    this.publicStore.schema = declaredKinds;
     this.publicStore.metadata = this.metadata as MetadataCollection<TMetadata>;
     for (const [key, definition] of kinds) {
       this.publicStore[key] = new KindCollectionRuntime(

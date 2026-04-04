@@ -4,6 +4,30 @@ import { z } from "zod";
 import { kind, kindstore } from "../src/index";
 
 describe("kindstore", () => {
+  test("exposes declared kind builders under db.schema", () => {
+    const filename = `file:kindstore-schema-surface-${crypto.randomUUID()}?mode=memory&cache=shared`;
+    const Session = z.object({
+      userId: z.string(),
+    });
+    const sessions = kind("ses", Session).index("userId");
+    const db = kindstore({
+      filename,
+      schema: {
+        sessions,
+      },
+    });
+    expect(db.schema.sessions).toBe(sessions);
+    expect(() =>
+      kindstore({
+        filename: `file:kindstore-reserved-schema-${crypto.randomUUID()}?mode=memory&cache=shared`,
+        schema: {
+          schema: kind("sch", z.object({ value: z.string() })),
+        },
+      }),
+    ).toThrow('Kind key "schema" is reserved.');
+    db.close();
+  });
+
   test("persists typed documents, queries indexed fields, and manages metadata", () => {
     const filename = `file:kindstore-crud-${crypto.randomUUID()}?mode=memory&cache=shared`;
     const Session = z.object({

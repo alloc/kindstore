@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.6
+
+- Added `db.schema`, which exposes the declared `KindBuilder` instances on the live `kindstore(...)` return value so downstream code can derive types like `KindInput<typeof db.schema.tasks>` directly from the store.
+
 ## 0.3.5
 
 - Fixed `.multi()` to reject unknown field keys at the type boundary while still accepting any top-level schema key.
