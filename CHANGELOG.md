@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.1
+
+- Fixed store opening to throw `UnrecoverableStoreOpenError` for unrecoverable internal metadata and format-version failures, so downstream code can detect the wipe-and-recreate case explicitly.
+
 ## 0.4.0
 
 - Breaking: simplified application metadata storage by removing kindstore-managed `created_at` and `updated_at` columns. Apps that need metadata timestamps should store them in the metadata payload explicitly.

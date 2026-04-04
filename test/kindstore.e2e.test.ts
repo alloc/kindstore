@@ -1,7 +1,18 @@
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 
-import { kind, kindstore } from "../src/index";
+import { UnrecoverableStoreOpenError, kind, kindstore } from "../src/index";
+
+function expectUnrecoverableOpen(open: () => unknown, message: string) {
+  let thrown: unknown;
+  try {
+    open();
+  } catch (error) {
+    thrown = error;
+  }
+  expect(thrown).toBeInstanceOf(UnrecoverableStoreOpenError);
+  expect((thrown as Error | undefined)?.message).toContain(message);
+}
 
 describe("kindstore", () => {
   test("exposes declared kind builders under db.schema", () => {
@@ -766,14 +777,43 @@ describe("kindstore", () => {
       },
     });
     db.raw.query(`DELETE FROM "__kindstore_internal" WHERE "key" = 'store_format_version'`).run();
-    expect(() =>
-      kindstore({
-        filename,
-        schema: {
-          sessions: kind("ses", Session).index("userId").index("status"),
-        },
-      }),
-    ).toThrow("missing the kindstore format version");
+    expectUnrecoverableOpen(
+      () =>
+        kindstore({
+          filename,
+          schema: {
+            sessions: kind("ses", Session).index("userId").index("status"),
+          },
+        }),
+      "missing the kindstore format version",
+    );
+    db.close();
+  });
+
+  test("marks malformed internal format-version metadata as unrecoverable", () => {
+    const filename = `file:kindstore-bad-format-${crypto.randomUUID()}?mode=memory&cache=shared`;
+    const Session = z.object({
+      userId: z.string(),
+    });
+    const db = kindstore({
+      filename,
+      schema: {
+        sessions: kind("ses", Session).index("userId"),
+      },
+    });
+    db.raw
+      .query(`UPDATE "__kindstore_internal" SET "payload" = ? WHERE "key" = 'store_format_version'`)
+      .run("oops");
+    expectUnrecoverableOpen(
+      () =>
+        kindstore({
+          filename,
+          schema: {
+            sessions: kind("ses", Session).index("userId"),
+          },
+        }),
+      'Internal metadata key "store_format_version" is malformed',
+    );
     db.close();
   });
 
@@ -791,14 +831,16 @@ describe("kindstore", () => {
     db.raw
       .query(`UPDATE "__kindstore_internal" SET "payload" = ? WHERE "key" = 'kind_versions'`)
       .run('"oops"');
-    expect(() =>
-      kindstore({
-        filename,
-        schema: {
-          sessions: kind("ses", Session).index("userId"),
-        },
-      }),
-    ).toThrow('Internal metadata key "kind_versions" is malformed');
+    expectUnrecoverableOpen(
+      () =>
+        kindstore({
+          filename,
+          schema: {
+            sessions: kind("ses", Session).index("userId"),
+          },
+        }),
+      'Internal metadata key "kind_versions" is malformed',
+    );
     db.close();
   });
 
@@ -816,14 +858,43 @@ describe("kindstore", () => {
     db.raw
       .query(`UPDATE "__kindstore_internal" SET "payload" = ? WHERE "key" = 'schema_snapshot'`)
       .run('{"kindstoreVersion":1,"kinds":{"sessions":{"tag":"ses"}}}');
-    expect(() =>
-      kindstore({
-        filename,
-        schema: {
-          sessions: kind("ses", Session).index("userId"),
-        },
-      }),
-    ).toThrow('Internal metadata key "schema_snapshot" has an invalid kind entry');
+    expectUnrecoverableOpen(
+      () =>
+        kindstore({
+          filename,
+          schema: {
+            sessions: kind("ses", Session).index("userId"),
+          },
+        }),
+      'Internal metadata key "schema_snapshot" has an invalid kind entry',
+    );
+    db.close();
+  });
+
+  test("marks unsupported newer store formats as unrecoverable", () => {
+    const filename = `file:kindstore-newer-format-${crypto.randomUUID()}?mode=memory&cache=shared`;
+    const Session = z.object({
+      userId: z.string(),
+    });
+    const db = kindstore({
+      filename,
+      schema: {
+        sessions: kind("ses", Session).index("userId"),
+      },
+    });
+    db.raw
+      .query(`UPDATE "__kindstore_internal" SET "payload" = ? WHERE "key" = 'store_format_version'`)
+      .run("2");
+    expectUnrecoverableOpen(
+      () =>
+        kindstore({
+          filename,
+          schema: {
+            sessions: kind("ses", Session).index("userId"),
+          },
+        }),
+      "newer than supported version",
+    );
     db.close();
   });
 

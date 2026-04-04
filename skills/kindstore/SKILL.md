@@ -11,6 +11,13 @@ exactly like these examples.
 
 kindstore is a registry-driven document store. It is not a general ORM.
 
+When opening an existing store, treat `UnrecoverableStoreOpenError` as the
+signal that the persisted internal metadata or store format cannot be opened
+safely by the current code. Downstream code that accepts data loss may catch
+that error and wipe the store before retrying; ordinary schema declaration,
+structural migration, or payload migration errors should still be handled as
+normal application failures.
+
 ## Start from real kinds
 
 ```ts

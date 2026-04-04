@@ -1,6 +1,7 @@
 import { Database } from "bun:sqlite";
 import { monotonicFactory } from "ulid";
 
+import { UnrecoverableStoreOpenError } from "./errors";
 import { KindBuilder } from "./kind";
 import type {
   DatabaseOptions,
@@ -257,7 +258,7 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
     const version = this.internal.getNumber(STORE_FORMAT_VERSION_KEY);
     if (version == null) {
       if (this.hasExistingStoreArtifacts()) {
-        throw new Error(
+        throw new UnrecoverableStoreOpenError(
           "Store is missing the kindstore format version and cannot be opened safely.",
         );
       }
@@ -265,10 +266,10 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
       return;
     }
     if (!Number.isInteger(version) || version < 1) {
-      throw new Error(`Invalid kindstore format version "${version}".`);
+      throw new UnrecoverableStoreOpenError(`Invalid kindstore format version "${version}".`);
     }
     if (version > KINDSTORE_FORMAT_VERSION) {
-      throw new Error(
+      throw new UnrecoverableStoreOpenError(
         `Store format version ${version} is newer than supported version ${KINDSTORE_FORMAT_VERSION}.`,
       );
     }
@@ -860,7 +861,13 @@ class InternalMetadataRuntime {
   }
 
   get(key: string) {
-    return this.table.get(key);
+    try {
+      return this.table.get(key);
+    } catch (error) {
+      throw new UnrecoverableStoreOpenError(`Internal metadata key "${key}" is malformed.`, {
+        cause: error,
+      });
+    }
   }
 
   getNumber(key: string) {
@@ -869,7 +876,7 @@ class InternalMetadataRuntime {
       return undefined;
     }
     if (typeof value !== "number") {
-      throw new Error(`Internal metadata key "${key}" must be a number.`);
+      throw new UnrecoverableStoreOpenError(`Internal metadata key "${key}" must be a number.`);
     }
     return value;
   }
@@ -936,10 +943,12 @@ class InternalMetadataRuntime {
       !Number.isInteger(snapshot.kindstoreVersion) ||
       !isRecord(snapshot.kinds)
     ) {
-      throw new Error(`Internal metadata key "${SCHEMA_SNAPSHOT_KEY}" is malformed.`);
+      throw new UnrecoverableStoreOpenError(
+        `Internal metadata key "${SCHEMA_SNAPSHOT_KEY}" is malformed.`,
+      );
     }
     if (snapshot.kindstoreVersion !== KINDSTORE_FORMAT_VERSION) {
-      throw new Error(
+      throw new UnrecoverableStoreOpenError(
         `Internal metadata key "${SCHEMA_SNAPSHOT_KEY}" references unsupported store format version "${snapshot.kindstoreVersion}".`,
       );
     }
@@ -952,7 +961,7 @@ class InternalMetadataRuntime {
         !isRecord(kind.columns) ||
         !isRecord(kind.indexes)
       ) {
-        throw new Error(
+        throw new UnrecoverableStoreOpenError(
           `Internal metadata key "${SCHEMA_SNAPSHOT_KEY}" has an invalid kind entry for "${kindKey}".`,
         );
       }
@@ -965,7 +974,7 @@ class InternalMetadataRuntime {
           !isSqliteTypeHint(column.type) ||
           typeof column.single !== "boolean"
         ) {
-          throw new Error(
+          throw new UnrecoverableStoreOpenError(
             `Internal metadata key "${SCHEMA_SNAPSHOT_KEY}" has an invalid column entry for "${kindKey}.${field}".`,
           );
         }
@@ -977,7 +986,7 @@ class InternalMetadataRuntime {
           !Array.isArray(index.columns) ||
           index.columns.some((column) => typeof column !== "string")
         ) {
-          throw new Error(
+          throw new UnrecoverableStoreOpenError(
             `Internal metadata key "${SCHEMA_SNAPSHOT_KEY}" has an invalid index entry for "${kindKey}.${indexName}".`,
           );
         }
@@ -996,11 +1005,13 @@ class InternalMetadataRuntime {
       return undefined;
     }
     if (!isRecord(versions)) {
-      throw new Error(`Internal metadata key "${KIND_VERSIONS_KEY}" is malformed.`);
+      throw new UnrecoverableStoreOpenError(
+        `Internal metadata key "${KIND_VERSIONS_KEY}" is malformed.`,
+      );
     }
     for (const [kind, version] of Object.entries(versions as Record<string, unknown>)) {
       if (typeof version !== "number" || !Number.isInteger(version) || version < 1) {
-        throw new Error(
+        throw new UnrecoverableStoreOpenError(
           `Internal metadata key "${KIND_VERSIONS_KEY}" has an invalid version for "${kind}".`,
         );
       }

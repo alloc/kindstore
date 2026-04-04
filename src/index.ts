@@ -1,4 +1,5 @@
 export { KindBuilder, kind } from "./kind";
+export { UnrecoverableStoreOpenError } from "./errors";
 export { kindstore } from "./store";
 
 export type {
