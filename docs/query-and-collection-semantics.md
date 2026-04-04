@@ -170,8 +170,11 @@ It does not support:
 
 ## Indexed-field restriction
 
-Typed filtering and ordering only apply to top-level fields that were
-explicitly declared through `.index(...)` or included in `.multi(...)`.
+Typed filtering and ordering only apply to declared query fields:
+
+- top-level payload fields explicitly declared through `.index(...)` or
+  included in `.multi(...)`
+- the store-managed `id` when it is explicitly included in `.multi(...)`
 
 That restriction is part of the contract, not an incidental limitation.
 

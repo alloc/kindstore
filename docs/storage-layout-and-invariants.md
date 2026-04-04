@@ -62,9 +62,10 @@ kindstore supports arbitrary document-path indexing.
 The durable rules are:
 
 - undeclared fields are stored only in the document payload
-- top-level fields declared through `.index(...)` or `.multi(...)` are eligible
-  for derived query support
-- query support is library-owned derived data, not application-owned state
+- top-level payload fields declared through `.index(...)` or `.multi(...)`, and
+  `id` when it is included in `.multi(...)`, are eligible for query support
+- query support is library-owned state: payload fields use derived columns,
+  while `id` reuses the row's primary-key column directly
 
 ## Managed payload timestamps
 

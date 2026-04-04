@@ -74,7 +74,7 @@ That example covers the happy path, but kindstore also supports:
 - one-step document creation with `create()` when you want kindstore to allocate the ID
 - full-document replacement and targeted updates with `get()`, `put()`, `update()`, and `delete()` in the same typed collection API
 - lazy query iteration with `iterate()` when you want incremental processing instead of materializing every result
-- compound indexes with `.multi(...)` for query shapes like `status + updatedAt`
+- compound indexes with `.multi(...)` for query shapes like `status + updatedAt` or `userId + id`
 - access to the declared kind builders through `db.schema`
 - typed store-level metadata via `db.metadata`
 - atomic multi-write workflows with `db.batch(...)`

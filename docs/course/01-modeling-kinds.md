@@ -121,11 +121,12 @@ yet. For example, adding `.multi("status_updatedAt", { status: "asc",
 updatedAt: "desc" })` only makes sense if you actually expect queries like
 "show the most recently updated tasks with status `doing`."
 
-`.multi(...)` may reference any top-level schema field, and it may also include
-the store-managed `id`, even if you did not also declare a standalone
-`.index(...)` for that field. kindstore will derive the generated columns it
-needs automatically. Add `.index(...)` as well when you want a dedicated
-single-column SQLite index or need an explicit SQLite type hint.
+`.multi(...)` may reference any top-level payload field, and it may also
+include the store-managed `id`, even if you did not also declare a standalone
+`.index(...)` for that field. kindstore derives any needed generated columns
+for payload fields automatically, while `id` reuses the existing row ID column.
+Add `.index(...)` as well when you want a dedicated single-column SQLite index
+or need an explicit SQLite type hint.
 
 ## Put the kind into a store
 

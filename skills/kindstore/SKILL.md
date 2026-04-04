@@ -63,14 +63,15 @@ Use this shape when you need:
 
 - stable tagged IDs like `tsk_...`
 - typed payload validation with Zod
-- typed filtering on declared top-level fields only
-- deterministic ordering on indexed fields
+- typed filtering on declared query fields only
+- deterministic ordering on declared query fields
 
-`.multi(...)` may reference any top-level schema field, and it may also include
-the store-managed `id`, even if those fields do not also have their own
-`.index(...)`. kindstore will derive the generated columns it needs
-automatically. Add a standalone `.index(...)` too when you want a dedicated
-single-field SQLite index or need an explicit SQLite type hint.
+`.multi(...)` may reference any top-level payload field, and it may also
+include the store-managed `id`, even if those fields do not also have their own
+`.index(...)`. kindstore derives any needed generated columns for payload
+fields automatically, while `id` reuses the existing row ID column. Add a
+standalone `.index(...)` too when you want a dedicated single-field SQLite
+index or need an explicit SQLite type hint.
 
 When a kind uses `.createdAt()` or `.updatedAt()`, kindstore adds integer
 timestamp fields to the schema if they are missing. If the field already exists
@@ -193,8 +194,8 @@ where: {
 
 Keep queries inside this boundary:
 
-- only top-level fields declared in `.index(...)` or `.multi(...)` are queryable, plus `id` when it is included in `.multi(...)`
-- ordering is only on fields declared in `.index(...)` or `.multi(...)`, plus `id` when it is included in `.multi(...)`
+- only declared query fields are queryable: top-level payload fields declared in `.index(...)` or `.multi(...)`, plus `id` when it is included in `.multi(...)`
+- ordering is only on declared query fields
 - the operators are `in`, `gt`, `gte`, `lt`, and `lte`
 - there is no arbitrary boolean composition or join support
 
