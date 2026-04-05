@@ -8,6 +8,11 @@ export type Omit<T, K extends PropertyKey> = {} & {
   [P in Exclude<keyof T, K>]: T[P];
 };
 
+/** Helper type for erasing intersection types in type output. */
+export type Simplify<T extends object> = {} & {
+  [K in keyof T]: T[K];
+};
+
 export type SqliteTypeHint = "text" | "integer" | "real" | "numeric";
 
 export type IndexDirection = "asc" | "desc";
@@ -47,17 +52,18 @@ type KindManagedTimestampField<T extends KindLike> =
   | KindManagedCreatedAt<T>
   | KindManagedUpdatedAt<T>;
 
-export type KindOutput<T extends KindLike> = {
-  id: KindId<T>;
-} & Omit<z.output<InferKind<T>["schema"]>, "id">;
+export type KindOutput<T extends KindLike> = Simplify<
+  { id: KindId<T> } & Omit<z.output<InferKind<T>["schema"]>, "id">
+>;
 
-export type KindInput<T extends KindLike> = Omit<
-  z.input<InferKind<T>["schema"]>,
-  KindManagedTimestampField<T> | "id" | "data"
-> &
-  Partial<Pick<z.input<InferKind<T>["schema"]>, KindManagedTimestampField<T>>>;
+export type KindInput<T extends KindLike> = Simplify<
+  Omit<z.input<InferKind<T>["schema"]>, KindManagedTimestampField<T> | "id" | "data"> &
+    Partial<Pick<z.input<InferKind<T>["schema"]>, KindManagedTimestampField<T>>>
+>;
 
-export type KindId<T extends KindLike> = TaggedId<InferKind<T>["tag"]>;
+export type KindId<T extends KindLike> = InferKind<T>["tag"] extends infer Tag extends string
+  ? TaggedId<Tag>
+  : never;
 
 export type KindIndexedField<T extends KindLike> = Extract<
   InferKind<T>["indexed"],

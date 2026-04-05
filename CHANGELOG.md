@@ -3,6 +3,7 @@
 ## 0.4.2
 
 - Fixed public type helpers to avoid leaking the built-in `Pick<...>` wrapper in downstream type output, keeping erased kindstore types more consistently flattened.
+- Fixed `KindInput`, `KindOutput`, and `KindId` to erase more cleanly in downstream inspected types so their emitted shapes stay readable.
 
 ## 0.4.1
 
