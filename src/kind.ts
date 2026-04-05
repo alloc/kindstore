@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import type {
   IndexDirection,
-  KindDefinition,
+  Kind,
   KindManagedCreatedAt,
   KindManagedUpdatedAt,
   KindMigration,
@@ -11,7 +11,7 @@ import type {
   SqliteTypeHint,
 } from "./types";
 
-type MultiIndexFields<T extends KindDefinition> = {
+type MultiIndexFields<T extends Kind> = {
   [K in KindPropertyKey<T> | "id"]?: IndexDirection;
 };
 
@@ -34,25 +34,25 @@ type ExtendSchema<TSchema extends z.ZodObject<any>, TKey extends string> =
     ? z.ZodObject<Omit<TShape, TKey> & Record<TKey, z.ZodNumber>, TConfig>
     : never;
 
-type ExtendKindSchema<T extends KindDefinition, TKey extends string> = Omit<T, "schema"> & {
+type ExtendKindSchema<T extends Kind, TKey extends string> = Omit<T, "schema"> & {
   schema: TKey extends KindPropertyKey<T> ? T["schema"] : ExtendSchema<T["schema"], TKey>;
 };
 
-type SetManagedCreatedAt<T extends KindDefinition, TKey extends string> = Omit<
+type SetManagedCreatedAt<T extends Kind, TKey extends string> = Omit<
   ExtendKindSchema<T, TKey>,
   "createdAtField"
 > & {
   createdAtField: TKey;
 };
 
-type SetManagedUpdatedAt<T extends KindDefinition, TKey extends string> = Omit<
+type SetManagedUpdatedAt<T extends Kind, TKey extends string> = Omit<
   ExtendKindSchema<T, TKey>,
   "updatedAtField"
 > & {
   updatedAtField: TKey;
 };
 
-export class KindBuilder<T extends KindDefinition> {
+export class KindBuilder<T extends Kind> {
   readonly tag: T["tag"];
   schema: T["schema"];
   version: T["version"];

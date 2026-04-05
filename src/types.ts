@@ -14,7 +14,7 @@ export type TaggedId<Tag extends string> = `${Tag}_${string}` & {
   readonly __kindstoreTag?: Tag;
 };
 
-export type KindDefinition = {
+export type Kind = {
   tag: string;
   schema: z.ZodObject<any>;
   indexed: string;
@@ -23,25 +23,22 @@ export type KindDefinition = {
   updatedAtField: string;
 };
 
-type KindLike = KindDefinition | KindBuilder<any>;
+type KindLike = Kind | KindBuilder<any>;
 
-type ResolveKindDefinition<T extends KindLike> =
-  T extends KindBuilder<infer B extends KindDefinition> ? B : T;
+type InferKindDefinition<T extends KindLike> = T extends KindBuilder<infer B extends Kind> ? B : T;
 
-export type KindPropertyKey<T extends KindLike> = keyof z.input<
-  ResolveKindDefinition<T>["schema"]
-> &
+export type KindPropertyKey<T extends KindLike> = keyof z.input<InferKindDefinition<T>["schema"]> &
   string;
 
 type KindIndexedKey<T extends KindLike> = KindPropertyKey<T> | "id";
 
 export type KindManagedCreatedAt<T extends KindLike> = Extract<
-  ResolveKindDefinition<T>["createdAtField"],
+  InferKindDefinition<T>["createdAtField"],
   KindPropertyKey<T>
 >;
 
 export type KindManagedUpdatedAt<T extends KindLike> = Extract<
-  ResolveKindDefinition<T>["updatedAtField"],
+  InferKindDefinition<T>["updatedAtField"],
   KindPropertyKey<T>
 >;
 
@@ -51,24 +48,24 @@ type KindManagedTimestampField<T extends KindLike> =
 
 export type KindOutput<T extends KindLike> = {
   id: KindId<T>;
-} & Omit<z.output<ResolveKindDefinition<T>["schema"]>, "id">;
+} & Omit<z.output<InferKindDefinition<T>["schema"]>, "id">;
 
 export type KindInput<T extends KindLike> = Omit<
-  z.input<ResolveKindDefinition<T>["schema"]>,
+  z.input<InferKindDefinition<T>["schema"]>,
   KindManagedTimestampField<T> | "id" | "data"
 > &
-  Partial<Pick<z.input<ResolveKindDefinition<T>["schema"]>, KindManagedTimestampField<T>>>;
+  Partial<Pick<z.input<InferKindDefinition<T>["schema"]>, KindManagedTimestampField<T>>>;
 
-export type KindId<T extends KindLike> = TaggedId<ResolveKindDefinition<T>["tag"]>;
+export type KindId<T extends KindLike> = TaggedId<InferKindDefinition<T>["tag"]>;
 
 export type KindIndexedField<T extends KindLike> = Extract<
-  ResolveKindDefinition<T>["indexed"],
+  InferKindDefinition<T>["indexed"],
   KindIndexedKey<T>
 >;
 
 type KindFieldValue<T extends KindLike, K extends KindIndexedField<T>> = K extends "id"
   ? KindId<T>
-  : z.output<ResolveKindDefinition<T>["schema"]>[K];
+  : z.output<InferKindDefinition<T>["schema"]>[K];
 
 export type FilterOperators<T> = {
   in?: readonly Exclude<T, undefined>[];
@@ -93,7 +90,7 @@ export type FindManyOptions<T extends KindLike> = {
 };
 
 export type KindPageCursor<T extends KindLike> = string & {
-  readonly __kindstorePageCursor?: ResolveKindDefinition<T>["tag"];
+  readonly __kindstorePageCursor?: InferKindDefinition<T>["tag"];
 };
 
 export type FindPageOptions<T extends KindLike> = {
@@ -114,7 +111,7 @@ export type KindMigrationContext = {
   readonly now: number;
 };
 
-export type KindMigration<T extends KindDefinition> = (
+export type KindMigration<T extends Kind> = (
   value: Partial<z.output<T["schema"]>> & Record<string, unknown>,
   context: KindMigrationContext,
 ) => z.output<T["schema"]> | Record<string, unknown>;

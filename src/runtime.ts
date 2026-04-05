@@ -9,7 +9,7 @@ import type {
   FindPageOptions,
   FindPageResult,
   IndexDirection,
-  KindDefinition,
+  Kind,
   KindId,
   KindInput,
   KindManagedCreatedAt,
@@ -62,7 +62,7 @@ type IndexColumn = {
   single: boolean;
 };
 
-type KindRuntimeDefinition<T extends KindDefinition> = {
+type KindRuntimeDefinition<T extends Kind> = {
   key: string;
   table: string;
   columns: Map<string, IndexColumn>;
@@ -122,7 +122,7 @@ type PageCursorData = {
   id: string;
 };
 
-export type KindCollection<T extends KindDefinition> = {
+export type KindCollection<T extends Kind> = {
   newId(): KindId<T>;
   create(value: KindInput<T>): KindOutput<T>;
   get(id: KindId<T>): KindOutput<T> | undefined;
@@ -365,7 +365,7 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
     };
   }
 
-  private renameKind<T extends KindDefinition>(
+  private renameKind<T extends Kind>(
     previousKey: string,
     previous: SnapshotKind,
     nextKey: string,
@@ -402,7 +402,7 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
     this.internal.deleteKindVersion(previousKey);
   }
 
-  private retagKindIfNeeded<T extends KindDefinition>(
+  private retagKindIfNeeded<T extends Kind>(
     key: string,
     previous: SnapshotKind,
     current: KindRuntimeDefinition<T>,
@@ -432,7 +432,7 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
     return true;
   }
 
-  private ensureKindTable<T extends KindDefinition>(definition: KindRuntimeDefinition<T>) {
+  private ensureKindTable<T extends Kind>(definition: KindRuntimeDefinition<T>) {
     this.database.run(
       `CREATE TABLE IF NOT EXISTS ${quoteIdentifier(definition.table)} (
         "id" TEXT PRIMARY KEY NOT NULL,
@@ -441,7 +441,7 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
     );
   }
 
-  private ensureGeneratedColumns<T extends KindDefinition>(definition: KindRuntimeDefinition<T>) {
+  private ensureGeneratedColumns<T extends Kind>(definition: KindRuntimeDefinition<T>) {
     const existing = new Set(
       (
         this.database.query(`PRAGMA table_xinfo(${quoteString(definition.table)})`).all() as {
@@ -459,7 +459,7 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
     }
   }
 
-  private reconcileIndexes<T extends KindDefinition>(
+  private reconcileIndexes<T extends Kind>(
     definition: KindRuntimeDefinition<T>,
     previous: SnapshotKind | undefined,
   ) {
@@ -480,7 +480,7 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
     }
   }
 
-  private dropStaleGeneratedColumns<T extends KindDefinition>(
+  private dropStaleGeneratedColumns<T extends Kind>(
     definition: KindRuntimeDefinition<T>,
     previous: SnapshotKind | undefined,
   ) {
@@ -522,7 +522,7 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
     };
   }
 
-  private migrateKind<T extends KindDefinition>(definition: KindRuntimeDefinition<T>) {
+  private migrateKind<T extends Kind>(definition: KindRuntimeDefinition<T>) {
     const version = this.internal.getKindVersion(definition.key);
     if (version == null) {
       this.internal.setKindVersion(definition.key, definition.definition.version);
@@ -580,7 +580,7 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
   }
 }
 
-class KindCollectionRuntime<T extends KindDefinition> implements KindCollection<T> {
+class KindCollectionRuntime<T extends Kind> implements KindCollection<T> {
   readonly database: Database;
   readonly definition: KindRuntimeDefinition<T>;
   readonly getStatement;
@@ -767,11 +767,11 @@ class MetadataTableRuntime {
       `SELECT "payload" FROM ${quoteIdentifier(table)} WHERE "key" = ?`,
     );
     this.setStatement = database.query(
-      (options.manageUpdatedAt
+      options.manageUpdatedAt
         ? `INSERT INTO ${quoteIdentifier(table)} ("key", "payload", "updated_at") VALUES (?, ?, ?)
            ON CONFLICT("key") DO UPDATE SET "payload" = excluded."payload", "updated_at" = excluded."updated_at"`
         : `INSERT INTO ${quoteIdentifier(table)} ("key", "payload") VALUES (?, ?)
-           ON CONFLICT("key") DO UPDATE SET "payload" = excluded."payload"`),
+           ON CONFLICT("key") DO UPDATE SET "payload" = excluded."payload"`,
     );
     this.deleteStatement = database.query(`DELETE FROM ${quoteIdentifier(table)} WHERE "key" = ?`);
     this.keysStatement = database.query(
@@ -1129,7 +1129,7 @@ function normalizeKinds<TKinds extends KindRegistry>(kinds: TKinds) {
   return definitions;
 }
 
-function normalizeColumns<T extends KindDefinition>(definition: KindBuilder<T>) {
+function normalizeColumns<T extends Kind>(definition: KindBuilder<T>) {
   const shape = definition.schema.shape as Record<string, unknown>;
   const columns = new Map<string, IndexColumn>();
   const seenColumns = new Set<string>();
@@ -1198,7 +1198,7 @@ function validateReservedRowDataFields(tag: string, shape: Record<string, unknow
   }
 }
 
-function validateManagedTimestampField<T extends KindDefinition>(
+function validateManagedTimestampField<T extends Kind>(
   definition: KindBuilder<T>,
   shape: Record<string, unknown>,
   field: string | undefined,
@@ -1241,7 +1241,7 @@ function inferSqliteType(schema: any, tag: string, field: string): SqliteTypeHin
   }
 }
 
-function compileWhere<T extends KindDefinition>(
+function compileWhere<T extends Kind>(
   columns: Map<string, IndexColumn>,
   where: KindWhere<T> | undefined,
 ): CompiledQuery {
@@ -1349,7 +1349,7 @@ function compileOrderBy(orderBy: ResolvedOrderByEntry[], includeIdTieBreaker = f
   return ` ORDER BY ${parts.join(", ")}`;
 }
 
-function compilePageAfter<T extends KindDefinition>(
+function compilePageAfter<T extends Kind>(
   definition: KindRuntimeDefinition<T>,
   orderBy: ResolvedOrderByEntry[],
   after: KindPageCursor<T> | undefined,
@@ -1425,7 +1425,7 @@ function compilePageAfter<T extends KindDefinition>(
   };
 }
 
-function encodePageCursor<T extends KindDefinition>(
+function encodePageCursor<T extends Kind>(
   definition: KindRuntimeDefinition<T>,
   orderBy: ResolvedOrderByEntry[],
   row: StoredRow,
@@ -1492,9 +1492,7 @@ function columnName(field: string) {
   return snakeCase(field);
 }
 
-function snapshotKind<T extends KindDefinition>(
-  definition: KindRuntimeDefinition<T>,
-): SnapshotKind {
+function snapshotKind<T extends Kind>(definition: KindRuntimeDefinition<T>): SnapshotKind {
   const columns: SnapshotKind["columns"] = {};
   for (const column of definition.columns.values()) {
     columns[column.field] = {
@@ -1513,7 +1511,7 @@ function snapshotKind<T extends KindDefinition>(
   };
 }
 
-function snapshotIndexes<T extends KindDefinition>(definition: KindRuntimeDefinition<T>) {
+function snapshotIndexes<T extends Kind>(definition: KindRuntimeDefinition<T>) {
   const indexes: Record<string, SnapshotIndex> = {};
   for (const column of definition.columns.values()) {
     if (!column.single) {
@@ -1538,7 +1536,7 @@ function snapshotIndexes<T extends KindDefinition>(definition: KindRuntimeDefini
   return indexes;
 }
 
-function applyManagedTimestamps<T extends KindDefinition>(
+function applyManagedTimestamps<T extends Kind>(
   definition: KindRuntimeDefinition<T>,
   value: Record<string, unknown>,
   current: Record<string, unknown> | undefined,

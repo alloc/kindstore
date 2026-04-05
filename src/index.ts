@@ -1,24 +1,26 @@
-export { KindBuilder, kind } from "./kind";
 export { UnrecoverableStoreOpenError } from "./errors";
+export { KindBuilder, kind } from "./kind";
 export { kindstore } from "./store";
 
+export type { KindCollection, Kindstore, MetadataCollection } from "./runtime";
+export type { MetadataSchemas } from "./store";
 export type {
   DatabaseOptions,
   FilterOperators,
+  FindManyOptions,
   FindPageOptions,
   FindPageResult,
-  FindManyOptions,
   IndexDirection,
-  KindDefinition,
+  Kind as KindDefinition,
   KindId,
-  KindInput,
   KindIndexedField,
-  KindPropertyKey,
+  KindInput,
   KindMigration,
   KindMigrationContext,
   KindOrderBy,
   KindOutput,
   KindPageCursor,
+  KindPropertyKey,
   KindRegistry,
   KindWhere,
   MetadataDefinitionMap,
@@ -30,5 +32,3 @@ export type {
   TaggedId,
   WhereOperand,
 } from "./types";
-export type { MetadataSchemas } from "./store";
-export type { KindCollection, Kindstore, MetadataCollection } from "./runtime";

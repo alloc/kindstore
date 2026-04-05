@@ -9,7 +9,7 @@ import type {
   FindManyOptions,
   FindPageOptions,
   FindPageResult,
-  KindDefinition,
+  Kind,
   KindId,
   KindInput,
   KindOutput,
@@ -36,7 +36,7 @@ test("type-level validation of core primitives", () => {
     .createdAt()
     .updatedAt();
 
-  type UserBag = typeof userKind extends KindBuilder<infer B extends KindDefinition> ? B : never;
+  type UserBag = typeof userKind extends KindBuilder<infer B extends Kind> ? B : never;
 
   // KindOutput is the typed document shape returned from collection APIs
   expectTypeOf<KindOutput<UserBag>>().toEqualTypeOf<{
@@ -131,8 +131,7 @@ test("type-level validation of multi-only query fields", () => {
     updatedAt: "desc",
   });
 
-  type ActivityBag =
-    typeof activityKind extends KindBuilder<infer B extends KindDefinition> ? B : never;
+  type ActivityBag = typeof activityKind extends KindBuilder<infer B extends Kind> ? B : never;
 
   expectTypeOf<KindWhere<ActivityBag>>().toEqualTypeOf<
     Partial<{
@@ -164,8 +163,7 @@ test("type-level validation of id in multi query fields", () => {
     id: "asc",
   });
 
-  type ActivityBag =
-    typeof activityKind extends KindBuilder<infer B extends KindDefinition> ? B : never;
+  type ActivityBag = typeof activityKind extends KindBuilder<infer B extends Kind> ? B : never;
 
   expectTypeOf<KindWhere<ActivityBag>>().toEqualTypeOf<
     Partial<{
