@@ -27,20 +27,19 @@ export type Kind = {
 
 type KindLike = Kind | KindBuilder<any>;
 
-type InferKindDefinition<T extends KindLike> = T extends KindBuilder<infer B extends Kind> ? B : T;
+type InferKind<T extends KindLike> = T extends KindBuilder<infer B extends Kind> ? B : T;
 
-export type KindPropertyKey<T extends KindLike> = keyof z.input<InferKindDefinition<T>["schema"]> &
-  string;
+export type KindPropertyKey<T extends KindLike> = keyof z.input<InferKind<T>["schema"]> & string;
 
 type KindIndexedKey<T extends KindLike> = KindPropertyKey<T> | "id";
 
 export type KindManagedCreatedAt<T extends KindLike> = Extract<
-  InferKindDefinition<T>["createdAtField"],
+  InferKind<T>["createdAtField"],
   KindPropertyKey<T>
 >;
 
 export type KindManagedUpdatedAt<T extends KindLike> = Extract<
-  InferKindDefinition<T>["updatedAtField"],
+  InferKind<T>["updatedAtField"],
   KindPropertyKey<T>
 >;
 
@@ -50,24 +49,24 @@ type KindManagedTimestampField<T extends KindLike> =
 
 export type KindOutput<T extends KindLike> = {
   id: KindId<T>;
-} & Omit<z.output<InferKindDefinition<T>["schema"]>, "id">;
+} & Omit<z.output<InferKind<T>["schema"]>, "id">;
 
 export type KindInput<T extends KindLike> = Omit<
-  z.input<InferKindDefinition<T>["schema"]>,
+  z.input<InferKind<T>["schema"]>,
   KindManagedTimestampField<T> | "id" | "data"
 > &
-  Partial<Pick<z.input<InferKindDefinition<T>["schema"]>, KindManagedTimestampField<T>>>;
+  Partial<Pick<z.input<InferKind<T>["schema"]>, KindManagedTimestampField<T>>>;
 
-export type KindId<T extends KindLike> = TaggedId<InferKindDefinition<T>["tag"]>;
+export type KindId<T extends KindLike> = TaggedId<InferKind<T>["tag"]>;
 
 export type KindIndexedField<T extends KindLike> = Extract<
-  InferKindDefinition<T>["indexed"],
+  InferKind<T>["indexed"],
   KindIndexedKey<T>
 >;
 
 type KindFieldValue<T extends KindLike, K extends KindIndexedField<T>> = K extends "id"
   ? KindId<T>
-  : z.output<InferKindDefinition<T>["schema"]>[K];
+  : z.output<InferKind<T>["schema"]>[K];
 
 export type FilterOperators<T> = {
   in?: readonly Exclude<T, undefined>[];
@@ -92,7 +91,7 @@ export type FindManyOptions<T extends KindLike> = {
 };
 
 export type KindPageCursor<T extends KindLike> = string & {
-  readonly __kindstorePageCursor?: InferKindDefinition<T>["tag"];
+  readonly __kindstorePageCursor?: InferKind<T>["tag"];
 };
 
 export type FindPageOptions<T extends KindLike> = {
