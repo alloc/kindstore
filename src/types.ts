@@ -4,7 +4,9 @@ import type { z } from "zod";
 import type { KindBuilder } from "./kind";
 
 /** Same as built-in Omit but can be erased for more readable type output. */
-export type Omit<T, K extends keyof any> = Pick<T, Exclude<keyof T, K>> & {};
+export type Omit<T, K extends PropertyKey> = {} & {
+  [P in Exclude<keyof T, K>]: T[P];
+};
 
 export type SqliteTypeHint = "text" | "integer" | "real" | "numeric";
 

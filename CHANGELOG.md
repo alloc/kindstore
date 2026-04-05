@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.2
+
+- Fixed public type helpers to avoid leaking the built-in `Pick<...>` wrapper in downstream type output, keeping erased kindstore types more consistently flattened.
+
 ## 0.4.1
 
 - Fixed store opening to throw `UnrecoverableStoreOpenError` for unrecoverable internal metadata and format-version failures, so downstream code can detect the wipe-and-recreate case explicitly.
