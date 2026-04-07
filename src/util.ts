@@ -21,6 +21,14 @@ export function assertTaggedId<TTag extends string>(tag: TTag, id: TaggedId<TTag
   }
 }
 
+export function taggedIdTag(id: string) {
+  const separator = id.indexOf("_");
+  if (separator <= 0) {
+    throw new Error(`Expected tagged ID, received "${id}".`);
+  }
+  return id.slice(0, separator);
+}
+
 export function parseRowData(rowData: string) {
   return JSON.parse(rowData) as Record<string, unknown>;
 }

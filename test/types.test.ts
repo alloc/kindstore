@@ -188,6 +188,9 @@ test("type-level validation of kindstore constructor", () => {
     title: z.string(),
     status: z.enum(["todo", "doing", "done"]),
   });
+  const User = z.object({
+    email: z.string(),
+  });
   const Preferences = z.object({
     theme: z.enum(["light", "dark"]),
   });
@@ -201,6 +204,7 @@ test("type-level validation of kindstore constructor", () => {
     },
     schema: {
       tasks: kind("tsk", Task).index("status"),
+      users: kind("usr", User),
     },
   });
 
@@ -221,6 +225,23 @@ test("type-level validation of kindstore constructor", () => {
     title: string;
     status: "todo" | "doing" | "done";
   }>();
+  expectTypeOf(
+    db.resolve(db.tasks.newId()),
+  ).toEqualTypeOf<
+    | {
+        id: `tsk_${string}`;
+        title: string;
+        status: "todo" | "doing" | "done";
+      }
+    | undefined
+  >();
+  expectTypeOf(db.resolve(db.users.newId())).toEqualTypeOf<
+    | {
+        id: `usr_${string}`;
+        email: string;
+      }
+    | undefined
+  >();
   expectTypeOf(db.metadata.get("preferences")).toEqualTypeOf<
     | {
         theme: "light" | "dark";
@@ -241,6 +262,9 @@ test("type-level validation of kindstore constructor", () => {
   }>();
 
   if (false) {
+    // @ts-expect-error - resolve only accepts IDs from declared kinds
+    db.resolve("other_123");
+
     // @ts-expect-error connection config object was removed
     kindstore({
       connection: { filename: ":memory:" },

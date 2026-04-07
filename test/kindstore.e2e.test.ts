@@ -36,6 +36,44 @@ describe("kindstore", () => {
         },
       }),
     ).toThrow('Kind key "schema" is reserved.');
+    expect(() =>
+      kindstore({
+        filename: `file:kindstore-reserved-resolve-${crypto.randomUUID()}?mode=memory&cache=shared`,
+        schema: {
+          resolve: kind("rsl", z.object({ value: z.string() })),
+        },
+      }),
+    ).toThrow('Kind key "resolve" is reserved.');
+    db.close();
+  });
+
+  test("resolves documents by tagged ID across kinds", () => {
+    const filename = `file:kindstore-resolve-${crypto.randomUUID()}?mode=memory&cache=shared`;
+    const User = z.object({
+      email: z.string(),
+    });
+    const Task = z.object({
+      title: z.string(),
+    });
+    const db = kindstore({
+      filename,
+      schema: {
+        users: kind("usr", User),
+        tasks: kind("tsk", Task),
+      },
+    });
+
+    const user = db.users.create({ email: "jane@example.com" });
+    const task = db.tasks.create({ title: "Ship docs" });
+
+    expect(db.resolve(user.id)).toEqual(user);
+    expect(db.resolve(task.id)).toEqual(task);
+    expect(db.resolve(db.tasks.newId())).toBeUndefined();
+    expect(() => db.resolve("invalid" as never)).toThrow('Expected tagged ID, received "invalid".');
+    expect(() => db.resolve("oth_123" as never)).toThrow(
+      'No kind is registered for tag "oth" from ID "oth_123".',
+    );
+
     db.close();
   });
 

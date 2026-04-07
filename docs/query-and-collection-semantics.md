@@ -10,9 +10,10 @@ translation details.
 
 ## Store surface
 
-A store exposes four public capabilities:
+A store exposes five public capabilities:
 
 - one typed collection per declared kind
+- tagged-ID resolution through `resolve(id)`
 - a typed application metadata surface
 - batch execution for grouping operations atomically
 - raw SQLite access as an escape hatch
@@ -48,6 +49,22 @@ The durable contract is:
 - collection methods reject IDs that do not belong to the collection's tag
 
 ## Read semantics
+
+### `resolve(id)`
+
+`resolve(id)` inspects the tag embedded in the document ID and dispatches the
+read to the matching collection.
+
+It returns the validated document for that ID, including the store-owned `id`
+field, or `undefined` if the matching kind exists but no row is stored under
+that ID.
+
+Its durable validation rules are:
+
+- malformed untagged IDs are rejected
+- IDs whose tag is not declared in the current store are rejected
+- when the tag is known, `resolve(id)` behaves like calling `get(id)` on the
+  matching collection directly
 
 ### `create(value)`
 

@@ -54,6 +54,8 @@ db.posts.put(id, {
   status: "published",
 });
 
+const samePost = db.resolve(id);
+
 const publishedPosts = db.posts.findMany({
   where: { status: "published" },
   orderBy: { updatedAt: "desc" },
@@ -73,6 +75,7 @@ That example covers the happy path, but kindstore also supports:
 
 - one-step document creation with `create()` when you want kindstore to allocate the ID
 - full-document replacement and targeted updates with `get()`, `put()`, `update()`, and `delete()` in the same typed collection API
+- store-level `resolve(id)` when you have a tagged ID and want kindstore to dispatch to the matching collection automatically
 - lazy query iteration with `iterate()` when you want incremental processing instead of materializing every result
 - compound indexes with `.multi(...)` for query shapes like `status + updatedAt` or `userId + id`
 - access to the declared kind builders through `db.schema`

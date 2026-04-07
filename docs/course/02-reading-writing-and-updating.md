@@ -62,6 +62,17 @@ const task = db.tasks.get(id);
 `get()` returns the validated document, including its `id`, or `undefined` when
 the ID does not exist.
 
+If you only have a tagged ID and want kindstore to choose the collection for
+you, use the store-level resolver:
+
+```ts
+const sameTask = db.resolve(id);
+```
+
+`resolve()` returns the same validated document shape as `get()`. It throws if
+the ID is malformed or if its tag does not match any declared kind in the
+store.
+
 ## Understand `put`
 
 `put()` is a replacement write.
@@ -146,7 +157,8 @@ This is the core loop for most collections:
 - create IDs with `newId()` when the caller needs to hold the ID before writing
 - write full documents with `put()` once you already know the target ID
 - make targeted changes with `update()`
-- read with `get()`
+- read with `get()` when you already know the collection
+- read with `resolve()` when you only have a tagged ID
 
 ## Rules to internalize
 

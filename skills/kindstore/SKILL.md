@@ -146,6 +146,7 @@ db.tasks.update(id, (current) => ({
 }));
 
 const after = db.tasks.get(id);
+const resolved = db.resolve(id);
 const removed = db.tasks.delete(id);
 ```
 
@@ -157,11 +158,16 @@ Read the API shape literally:
 - `update(id, patch)` is a shallow partial update
 - `update(id, fn)` is for computed next values
 - `get(id)` and `update(id, ...)` return `undefined` when no row exists
+- `resolve(id)` dispatches by the tagged ID prefix and returns the matching
+  document, or `undefined` if that kind exists but no row is stored under that
+  ID
 - `delete(id)` returns `boolean`
 
 Prefer `create()` when the store should allocate the ID as part of the write.
 Reach for `newId()` plus `put()` when the caller needs the ID before writing,
 such as optimistic state, batching related writes, or cross-record references.
+Reach for `resolve(id)` when the caller has a tagged ID but not the collection
+handle that produced it.
 
 ## Reach for the right read method
 

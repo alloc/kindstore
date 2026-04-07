@@ -37,6 +37,7 @@ import {
   quoteString,
   sameColumns,
   snakeCase,
+  taggedIdTag,
 } from "./util";
 
 const KINDSTORE_FORMAT_VERSION = 1;
@@ -45,7 +46,14 @@ const APP_METADATA_TABLE = "__kindstore_app_metadata";
 const STORE_FORMAT_VERSION_KEY = "store_format_version";
 const KIND_VERSIONS_KEY = "kind_versions";
 const SCHEMA_SNAPSHOT_KEY = "schema_snapshot";
-const RESERVED_STORE_KEYS = new Set(["batch", "close", "connection", "metadata", "raw", "schema"]);
+const RESERVED_STORE_KEYS = new Set([
+  "batch",
+  "close",
+  "metadata",
+  "raw",
+  "resolve",
+  "schema",
+]);
 const RESERVED_ROW_COLUMNS = new Set(["id", "data"]);
 const nextUlid = monotonicFactory();
 const PAGE_CURSOR_VERSION = 1;
@@ -148,12 +156,29 @@ export type MetadataCollection<T extends MetadataDefinitionMap> = {
   ): MetadataValue<T, K>;
 };
 
+type StoreKind<TKinds extends KindRegistry> = TKinds[keyof TKinds];
+
+type StoreKindId<TKinds extends KindRegistry> = StoreKind<TKinds> extends infer TKind extends
+  KindBuilder<any>
+  ? KindId<TKind>
+  : never;
+
+type ResolvedKind<TKinds extends KindRegistry, TId extends string> = {
+  [K in keyof TKinds]: TId extends KindId<TKinds[K]> ? TKinds[K] : never;
+}[keyof TKinds];
+
+type ResolvedKindOutput<TKinds extends KindRegistry, TId extends string> =
+  ResolvedKind<TKinds, TId> extends infer TKind extends KindBuilder<any>
+    ? KindOutput<TKind>
+    : never;
+
 export type Kindstore<TKinds extends KindRegistry, TMetadata extends MetadataDefinitionMap> = {
   readonly raw: Database;
   readonly schema: TKinds;
   readonly metadata: MetadataCollection<TMetadata>;
   batch<TResult>(callback: () => TResult): TResult;
   close(): void;
+  resolve<TId extends StoreKindId<TKinds>>(id: TId): ResolvedKindOutput<TKinds, TId> | undefined;
 } & {
   [K in keyof TKinds]: TKinds[K] extends KindBuilder<infer TBag> ? KindCollection<TBag> : never;
 };
@@ -184,6 +209,7 @@ export function createStore<TKinds extends KindRegistry, TMetadata extends Metad
 class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
   readonly database: Database;
   readonly kinds: Map<string, KindRuntimeDefinition<any>>;
+  readonly collectionsByTag: Map<string, KindCollectionRuntime<any>>;
   readonly publicStore: Record<string, unknown>;
   readonly internal: InternalMetadataRuntime;
   readonly metadata: MetadataRuntime<TMetadata>;
@@ -198,6 +224,7 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
   ) {
     this.database = database;
     this.kinds = kinds;
+    this.collectionsByTag = new Map();
     this.schemaPlan = schemaPlan;
     this.publicStore = this as Record<string, unknown>;
     this.ensureInternalTable();
@@ -208,10 +235,9 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
     this.publicStore.schema = declaredKinds;
     this.publicStore.metadata = this.metadata as MetadataCollection<TMetadata>;
     for (const [key, definition] of kinds) {
-      this.publicStore[key] = new KindCollectionRuntime(
-        database,
-        definition,
-      ) as KindCollection<any>;
+      const collection = new KindCollectionRuntime(database, definition);
+      this.collectionsByTag.set(definition.definition.tag, collection);
+      this.publicStore[key] = collection as KindCollection<any>;
     }
   }
 
@@ -221,6 +247,15 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
 
   close() {
     this.database.close();
+  }
+
+  resolve(id: string) {
+    const tag = taggedIdTag(id);
+    const collection = this.collectionsByTag.get(tag);
+    if (!collection) {
+      throw new Error(`No kind is registered for tag "${tag}" from ID "${id}".`);
+    }
+    return collection.get(id as never);
   }
 
   private bootstrap() {
