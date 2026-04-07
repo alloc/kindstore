@@ -18,6 +18,14 @@ that error and wipe the store before retrying; ordinary schema declaration,
 structural migration, or payload migration errors should still be handled as
 normal application failures.
 
+When you need docs, route to the smallest surface that owns the answer:
+
+- `README.md` for the documentation map
+- `docs/context.md` for the stable mental model and task-to-API map
+- `examples/*.ts` for runnable workflows
+- `dist/index.d.mts` for exact exported signatures
+- `docs/course/*.md` for the short sequenced learning path
+
 ## Start from real kinds
 
 ```ts

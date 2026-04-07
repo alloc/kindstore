@@ -1,11 +1,26 @@
 # 05. Payload migrations
 
-## Goal
+This lesson is about changing a kind's document shape without leaving old rows
+behind.
 
-Learn how to evolve a kind's document payload shape without leaving persisted
-rows behind.
+If you need the broader migration model first, read
+[../migration-pipeline.md](../migration-pipeline.md).
 
-## Start with version 1
+## When you need this
+
+Use payload migration when the kind stays the same logical collection, but the
+document body needs to change shape.
+
+Typical examples:
+
+- add a required field with a default
+- rename or normalize a field inside the payload
+- introduce a managed timestamp such as `.updatedAt()`
+
+If the change affects which rows belong to which kind, or changes the tag in
+persisted IDs, this is not the right tool.
+
+## Minimal example
 
 ```ts
 import { z } from "zod";
@@ -22,12 +37,6 @@ const db = kindstore({
   },
 });
 ```
-
-At this point, `tasks` is at payload version `1`.
-
-## Evolve the schema
-
-Now suppose version 2 adds `status` and `updatedAt`.
 
 ```ts
 const TaskV2 = z.object({
@@ -56,44 +65,29 @@ const db = kindstore({
 });
 ```
 
-## Understand the model
+## What this is not
 
-The `migrate(version, steps)` call means:
+Payload migration rewrites document bodies only. It does not:
 
-- the current payload version for this kind is `version`
-- each numbered step upgrades from one version to the next
-- missing steps are an error
+- rename a kind in the store registry
+- drop a previous kind
+- change a kind's tag
 
-In the example above, the step labeled `1` upgrades rows from version 1 to
-version 2.
+Those are structural changes and belong to store-level migration instead.
 
-## Migrations are eager
+## Keep in mind
 
-Payload migrations run when the store opens, before ordinary typed reads and
-queries begin.
+- `.migrate(version, steps)` declares the current payload version and the step
+  functions needed to reach it.
+- Steps are eager. kindstore runs them during store open before typed reads and
+  queries begin.
+- Missing intermediate steps are an error.
+- Old rows should be treated as partial input.
+- The returned value must satisfy the new schema fully.
+- `context.now` is available when the migration itself needs a stable
+  timestamp.
 
-That means callers do not have to:
-
-- touch old rows to upgrade them
-- handle mixed payload versions at read time
-- guess whether indexed queries are seeing stale row shapes
-
-This is a major part of kindstore's model.
-
-## Use `context.now` when the migration itself needs a timestamp
-
-The migration context currently gives you a store-managed `now` value.
-
-That is useful when the migration itself needs to introduce timestamps or other
-derived defaults without calling `Date.now()` repeatedly inside the migration
-loop.
-
-In the example above, `updatedAt` does not need `context.now` because the kind
-declared `.updatedAt()`, so the store assigns it automatically on
-migration rewrites too.
-
-If a later migration also introduced a separate timestamp field, a step could
-look like this:
+For example:
 
 ```ts
 1: (value, context) => ({
@@ -103,31 +97,15 @@ look like this:
 })
 ```
 
-## Practical rules
+## Executable references
 
-- Keep migration steps small and explicit. For example, add `status` and
-  `updatedAt` in one version step instead of mixing unrelated redesign work into
-  the same migration.
-- Treat `id` as store-owned, and `data` as reserved for storage. Payload
-  migration steps should rewrite document bodies, not assign or depend on
-  either field living inside the payload.
-- Treat old persisted rows as partial input, because earlier versions may not
-  have every field your new schema expects.
-- Make the returned value satisfy the new schema completely. If version 2
-  requires `status`, the migration should always produce one.
-- Add new indexes alongside the new schema version if the new fields need typed
-  querying. For example, if version 2 introduces `updatedAt` and you plan to
-  order by it, declare that index in the same upgraded kind definition.
+The best runnable examples for this topic are the migration tests rather than
+standalone examples:
 
-## What payload migrations do not solve
-
-Payload migrations change document bodies. They do not handle:
-
-- renaming a kind in the store registry
-- deleting a previously persisted kind
-- changing a kind's tag
-
-Those are structural changes and belong to store-level schema migration.
+- [test/kindstore.e2e.test.ts](../../test/kindstore.e2e.test.ts):
+  `runs eager migrations before reads and indexed queries`
+- [test/kindstore.e2e.test.ts](../../test/kindstore.e2e.test.ts):
+  `rolls back failed payload migrations without advancing kind versions`
 
 ## Next
 

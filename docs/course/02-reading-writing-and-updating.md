@@ -1,180 +1,35 @@
 # 02. Reading, writing, and updating
 
-## Goal
+This lesson is a checkpoint, not a full walkthrough.
 
-Learn the everyday collection workflow and the behavioral difference between
-replacement writes and updates.
+Run [examples/basic-usage.ts](../../examples/basic-usage.ts) for the
+canonical workflow, then use this page to choose the right operation.
 
-## Set up a collection
+## Choose the right write
 
-```ts
-import { z } from "zod";
-import { kind, kindstore } from "kindstore";
+- `create(value)`: let kindstore allocate the ID and insert one new document.
+- `newId()` then `put(id, value)`: use this when the caller needs the ID before
+  the write happens.
+- `put(id, value)`: replacement write for the full next document.
+- `update(id, patch)`: shallow partial update.
+- `update(id, fn)`: computed next value based on the current stored document.
+- `delete(id)`: remove one document and get a `boolean` back.
 
-const Task = z.object({
-  title: z.string(),
-  status: z.enum(["todo", "doing", "done"]),
-  updatedAt: z.number().int(),
-  assigneeId: z.string().optional(),
-});
+## Choose the right read
 
-const db = kindstore({
-  filename: ":memory:",
-  schema: {
-    tasks: kind("tsk", Task).index("status").index("updatedAt"),
-  },
-});
-```
+- `get(id)`: read by known collection.
+- `resolve(id)`: read by tagged ID when you do not already have the collection.
+- `get(id)` and `update(id, ...)`: return `undefined` when the document is
+  missing.
 
-## Create a document
+## Keep in mind
 
-```ts
-const task = db.tasks.create({
-  title: "Ship docs",
-  status: "todo",
-  updatedAt: Date.now(),
-});
-```
-
-`create()` allocates a fresh tagged ID, validates the value, and stores it.
-The returned document includes the generated `id`.
-If allocation collides, `create()` fails instead of replacing an existing row.
-
-If you need to choose or hold the ID yourself, use `newId()` and `put()`
-directly:
-
-```ts
-const id = db.tasks.newId();
-
-db.tasks.put(id, {
-  title: "Ship docs",
-  status: "todo",
-  updatedAt: Date.now(),
-});
-```
-
-## Read a document
-
-```ts
-const task = db.tasks.get(id);
-```
-
-`get()` returns the validated document, including its `id`, or `undefined` when
-the ID does not exist.
-
-If you only have a tagged ID and want kindstore to choose the collection for
-you, use the store-level resolver:
-
-```ts
-const sameTask = db.resolve(id);
-```
-
-`resolve()` returns the same validated document shape as `get()`. It throws if
-the ID is malformed or if its tag does not match any declared kind in the
-store.
-
-## Understand `put`
-
-`put()` is a replacement write.
-
-That means:
-
-- if the ID is new, the document is inserted
-- if the ID already exists, the stored payload is replaced
-- `put()` does not merge fields into the existing payload
-
-```ts
-db.tasks.put(id, {
-  title: "Ship docs today",
-  status: "doing",
-  updatedAt: Date.now(),
-});
-```
-
-Use `put()` when you already have the full next document.
-For example, a form submit that sends the full next task object is a good fit
-for `put()`.
-
-## Use `update()` for partial or computed changes
-
-Patch style:
-
-```ts
-db.tasks.update(id, {
-  status: "done",
-  updatedAt: Date.now(),
-});
-```
-
-Function style:
-
-```ts
-db.tasks.update(id, (current) => ({
-  ...current,
-  status: "doing",
-  updatedAt: Date.now(),
-}));
-```
-
-Use patch style when the change is obvious and shallow. Use function style when
-the next value depends on the current document. For example, patch style works
-well for "set `status` to `done`", while function style is safer for "append a
-derived field based on the current value" because you can inspect the existing
-document first.
-
-If the document does not exist, `update()` returns `undefined`.
-
-## Delete a document
-
-```ts
-const removed = db.tasks.delete(id);
-```
-
-`delete()` returns `true` when something was removed and `false` otherwise.
-
-## A practical workflow
-
-```ts
-const id = db.tasks.newId();
-
-db.tasks.put(id, {
-  title: "Review pull request",
-  status: "todo",
-  updatedAt: Date.now(),
-});
-
-db.tasks.update(id, {
-  status: "doing",
-  updatedAt: Date.now(),
-});
-
-const latest = db.tasks.get(id);
-```
-
-This is the core loop for most collections:
-
-- create fresh documents with `create()` when kindstore should allocate the ID
-- create IDs with `newId()` when the caller needs to hold the ID before writing
-- write full documents with `put()` once you already know the target ID
-- make targeted changes with `update()`
-- read with `get()` when you already know the collection
-- read with `resolve()` when you only have a tagged ID
-
-## Rules to internalize
-
-- `put()` replaces the payload. It is not a merge helper. If you leave out a
-  field during `put()`, kindstore treats that as part of the new full document,
-  not as "keep the old value."
-- `update()` is the typed partial-update path, so prefer it when you only want
-  to change `status`, `updatedAt`, or another small part of the document.
-- Collection methods are tag-aware. Use the ID from the matching collection,
-  because a `tasks` ID should not be accepted by a different kind just because
-  both are strings.
-- `id` is store-owned, and `data` is reserved for storage. Do not declare
-  either field in the kind schema or try to treat them as ordinary payload
-  input.
-- All typed reads and writes pass through schema validation, which is why the
-  typed API is the safe default and raw SQL is not.
+- `put()` is not a merge helper. Omitted fields are replaced away.
+- Collection methods are tag-aware, so IDs must belong to the matching kind.
+- `id` is store-owned and `data` is reserved for storage.
+- Exact signatures and examples now live outside the course:
+  [../../dist/index.d.mts](../../dist/index.d.mts) and
+  [examples/basic-usage.ts](../../examples/basic-usage.ts).
 
 ## Next
 

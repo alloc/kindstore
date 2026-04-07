@@ -31,6 +31,13 @@ type InferKinds<TKinds extends KindRegistry> = {
   >;
 };
 
+/**
+ * Opens a kindstore instance against a SQLite database.
+ *
+ * @remarks
+ * Startup reconciles structural changes and runs required payload migrations
+ * before the returned store becomes usable.
+ */
 export function kindstore<
   const TKinds extends KindRegistry,
   const TMetadata extends MetadataDefinitionMap = {},
@@ -49,4 +56,7 @@ export function kindstore<
   ) as Kindstore<InferKinds<TKinds>, TMetadata>;
 }
 
+/**
+ * Zod schema map for the store-level application metadata surface.
+ */
 export type MetadataSchemas = Record<string, z.ZodTypeAny>;

@@ -8,6 +8,10 @@ store APIs.
 It focuses on caller-visible semantics rather than code structure or exact SQL
 translation details.
 
+Exact signatures live in [../dist/index.d.mts](../dist/index.d.mts), and
+runnable usage lives in [examples/](../examples/). This document exists to
+capture the stable behavioral boundary those surfaces should reflect.
+
 ## Store surface
 
 A store exposes five public capabilities:

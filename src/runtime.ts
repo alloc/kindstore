@@ -46,14 +46,7 @@ const APP_METADATA_TABLE = "__kindstore_app_metadata";
 const STORE_FORMAT_VERSION_KEY = "store_format_version";
 const KIND_VERSIONS_KEY = "kind_versions";
 const SCHEMA_SNAPSHOT_KEY = "schema_snapshot";
-const RESERVED_STORE_KEYS = new Set([
-  "batch",
-  "close",
-  "metadata",
-  "raw",
-  "resolve",
-  "schema",
-]);
+const RESERVED_STORE_KEYS = new Set(["batch", "close", "metadata", "raw", "resolve", "schema"]);
 const RESERVED_ROW_COLUMNS = new Set(["id", "data"]);
 const nextUlid = monotonicFactory();
 const PAGE_CURSOR_VERSION = 1;
@@ -130,26 +123,52 @@ type PageCursorData = {
   id: string;
 };
 
+/**
+ * Typed collection API for one declared kind.
+ */
 export type KindCollection<T extends Kind> = {
+  /** Returns a fresh opaque ID tagged for this kind. */
   newId(): KindId<T>;
+  /** Allocates an ID, validates the payload, and inserts one new document. */
   create(value: KindInput<T>): KindOutput<T>;
+  /** Reads one validated document by ID, or `undefined` if it does not exist. */
   get(id: KindId<T>): KindOutput<T> | undefined;
+  /** Replaces the stored payload for `id`, inserting on the first write. */
   put(id: KindId<T>, value: KindInput<T>): KindOutput<T>;
+  /** Removes one document and returns whether anything was deleted. */
   delete(id: KindId<T>): boolean;
+  /** Performs an atomic read-modify-write using a shallow patch or updater. */
   update(
     id: KindId<T>,
     updater: PatchValue<KindInput<T>> | ((current: KindOutput<T>) => KindInput<T>),
   ): KindOutput<T> | undefined;
+  /** Returns the first matching document, or `undefined` when no row matches. */
   first(options?: FindManyOptions<T>): KindOutput<T> | undefined;
+  /** Materializes all matching documents into memory. */
   findMany(options?: FindManyOptions<T>): KindOutput<T>[];
+  /**
+   * Returns one forward-only page of documents and an optional cursor for the
+   * next page.
+   *
+   * @remarks
+   * Requires an explicit `orderBy` and a positive `limit`.
+   */
   findPage(options: FindPageOptions<T>): FindPageResult<T>;
+  /** Lazily iterates matching documents without materializing the full result set. */
   iterate(options?: FindManyOptions<T>): IterableIterator<KindOutput<T>>;
 };
 
+/**
+ * Typed key/value API for store-scoped application metadata.
+ */
 export type MetadataCollection<T extends MetadataDefinitionMap> = {
+  /** Reads one metadata value, or `undefined` when it has not been set. */
   get<K extends keyof T & string>(key: K): MetadataValue<T, K> | undefined;
+  /** Validates and writes one metadata value. */
   set<K extends keyof T & string>(key: K, value: MetadataValue<T, K>): MetadataValue<T, K>;
+  /** Removes one metadata value and returns whether anything was deleted. */
   delete<K extends keyof T & string>(key: K): boolean;
+  /** Updates one metadata value atomically from its current value. */
   update<K extends keyof T & string>(
     key: K,
     updater: (current: MetadataValue<T, K> | undefined) => MetadataValue<T, K>,
@@ -158,10 +177,8 @@ export type MetadataCollection<T extends MetadataDefinitionMap> = {
 
 type StoreKind<TKinds extends KindRegistry> = TKinds[keyof TKinds];
 
-type StoreKindId<TKinds extends KindRegistry> = StoreKind<TKinds> extends infer TKind extends
-  KindBuilder<any>
-  ? KindId<TKind>
-  : never;
+type StoreKindId<TKinds extends KindRegistry> =
+  StoreKind<TKinds> extends infer TKind extends KindBuilder<any> ? KindId<TKind> : never;
 
 type ResolvedKind<TKinds extends KindRegistry, TId extends string> = {
   [K in keyof TKinds]: TId extends KindId<TKinds[K]> ? TKinds[K] : never;
@@ -172,17 +189,29 @@ type ResolvedKindOutput<TKinds extends KindRegistry, TId extends string> =
     ? KindOutput<TKind>
     : never;
 
+/**
+ * Store surface returned from `kindstore(...)`.
+ */
 export type Kindstore<TKinds extends KindRegistry, TMetadata extends MetadataDefinitionMap> = {
+  /** Underlying Bun SQLite database connection. */
   readonly raw: Database;
+  /** Declared kind builders keyed by collection name. */
   readonly schema: TKinds;
+  /** Typed application metadata collection. */
   readonly metadata: MetadataCollection<TMetadata>;
+  /** Runs the callback in one SQLite transaction. */
   batch<TResult>(callback: () => TResult): TResult;
+  /** Closes the underlying database connection. */
   close(): void;
+  /** Dispatches a tagged ID to the matching collection automatically. */
   resolve<TId extends StoreKindId<TKinds>>(id: TId): ResolvedKindOutput<TKinds, TId> | undefined;
 } & {
   [K in keyof TKinds]: TKinds[K] extends KindBuilder<infer TBag> ? KindCollection<TBag> : never;
 };
 
+/**
+ * Internal helper that backs `kindstore(...)` after input normalization.
+ */
 export function createStore<TKinds extends KindRegistry, TMetadata extends MetadataDefinitionMap>(
   filename: string,
   databaseOptions: DatabaseOptions | undefined,

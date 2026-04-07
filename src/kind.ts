@@ -52,6 +52,13 @@ type SetManagedUpdatedAt<T extends Kind, TKey extends string> = Omit<
   updatedAtField: TKey;
 };
 
+/**
+ * Fluent builder for one kind declaration.
+ *
+ * @remarks
+ * The builder records schema, index, and migration intent. kindstore does not
+ * materialize storage until you pass the builder to `kindstore(...)`.
+ */
 export class KindBuilder<T extends Kind> {
   readonly tag: T["tag"];
   schema: T["schema"];
@@ -68,6 +75,14 @@ export class KindBuilder<T extends Kind> {
     this.version = version;
   }
 
+  /**
+   * Declares a top-level payload field as queryable through kindstore's typed
+   * filtering and ordering APIs.
+   *
+   * @remarks
+   * Pass `options.type` only when SQLite type inference from the Zod field is
+   * not the affinity you want.
+   */
   index<TKey extends KindPropertyKey<T>>(field: TKey, options: { type?: SqliteTypeHint } = {}) {
     const current = this.indexes.get(field);
     this.indexes.set(field, {
@@ -78,6 +93,13 @@ export class KindBuilder<T extends Kind> {
     return this as unknown as KindBuilder<Omit<T, "indexed"> & { indexed: T["indexed"] | TKey }>;
   }
 
+  /**
+   * Lets kindstore assign a payload creation timestamp for this kind.
+   *
+   * @remarks
+   * If the field does not already exist in the schema, kindstore adds it as an
+   * integer timestamp field.
+   */
   createdAt<const TKey extends string = "createdAt">(field?: TKey) {
     const resolvedField = (field ?? "createdAt") as TKey;
     const shape = this.schema.shape as Record<string, unknown>;
@@ -95,6 +117,13 @@ export class KindBuilder<T extends Kind> {
     return this as unknown as KindBuilder<SetManagedCreatedAt<T, TKey>>;
   }
 
+  /**
+   * Lets kindstore assign a payload modification timestamp for this kind.
+   *
+   * @remarks
+   * If the field does not already exist in the schema, kindstore adds it as an
+   * integer timestamp field.
+   */
   updatedAt<const TKey extends string = "updatedAt">(field?: TKey) {
     const resolvedField = (field ?? "updatedAt") as TKey;
     const shape = this.schema.shape as Record<string, unknown>;
@@ -112,6 +141,10 @@ export class KindBuilder<T extends Kind> {
     return this as unknown as KindBuilder<SetManagedUpdatedAt<T, TKey>>;
   }
 
+  /**
+   * Declares a composite index over top-level payload fields and, optionally,
+   * the store-owned `id`.
+   */
   multi<const TName extends string, const TFields extends MultiIndexFields<T>>(
     name: TName,
     fields: ExactFieldKeys<TFields, KindPropertyKey<T> | "id">,
@@ -129,6 +162,10 @@ export class KindBuilder<T extends Kind> {
     >;
   }
 
+  /**
+   * Declares the current payload version for this kind and the eager upgrade
+   * steps from older versions.
+   */
   migrate<const TVersion extends number>(
     version: TVersion,
     steps: Record<number, KindMigration<T>>,
@@ -142,6 +179,18 @@ export class KindBuilder<T extends Kind> {
   }
 }
 
+/**
+ * Starts a kind declaration for one document category.
+ *
+ * @remarks
+ * The `tag` becomes part of persisted document IDs, so changing it later
+ * requires a structural migration.
+ *
+ * @example
+ * ```ts
+ * const Tasks = kind("tsk", Task).index("status");
+ * ```
+ */
 export function kind<const TTag extends string, const TSchema extends z.ZodObject<any>>(
   tag: TTag,
   schema: TSchema,

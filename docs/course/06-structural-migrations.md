@@ -1,24 +1,25 @@
 # 06. Structural migrations
 
-## Goal
+This lesson is about changes that affect kind ownership or document identity.
 
-Learn when a store-level structural migration is required and how to express it
-explicitly.
+If you need the maintainer-facing policy boundary first, read
+[../schema-reconciliation.md](../schema-reconciliation.md).
 
-## The problem structural migration solves
+## When you need this
 
-Payload migration rewrites document bodies inside a kind.
+Use structural migration when the declaration changes row ownership or document
+identity across store opens.
 
-Structural migration handles changes such as:
+Typical examples:
 
-- renaming a kind in the registry
-- deleting a previously persisted kind
-- changing a kind's tag
+- a collection key is renamed
+- an old kind should be removed explicitly
+- a kind keeps its rows but changes ID tag prefix
 
-These changes affect row ownership or document identity, so kindstore requires
-explicit intent instead of guessing.
+If the kind stays the same logical collection and only the payload body changes,
+you want payload migration instead.
 
-## Use the top-level `migrate(...)` planner
+## Minimal example
 
 ```ts
 import { z } from "zod";
@@ -42,73 +43,50 @@ const db = kindstore({
 });
 ```
 
-This tells kindstore:
+## What this is not
 
-- the previous `tasks` collection is now `workItems`
-- the current `workItems` kind used to have the tag `"tsk"`
-- the previous `drafts` collection should be removed
+Structural migration is not for rewriting fields inside stored documents. It
+does not replace kind-level `.migrate(version, steps)`.
 
-## Understand each operation
-
-### `rename(previousKindKey, nextKindKey)`
-
-Use this when a current collection is the continuation of a previous collection
-under a new registry key. For example, `m.rename("tasks", "workItems")` says
-that `workItems` now owns the rows that previously belonged to `tasks`.
-
-### `drop(previousKindKey)`
-
-Use this when a previous collection should be deleted instead of carried
-forward. For example, `m.drop("drafts")` is the explicit way to say that old
-draft rows should not survive into the new store shape.
-
-### `retag(kindKey, previousTag)`
-
-Use this when the collection is still the same logical kind but its tagged ID
-prefix is changing. For example, `m.retag("workItems", "tsk")` says that the
-current `workItems` collection used to use the `"tsk"` tag and is now switching
-to a new one.
-
-## When startup will fail
-
-kindstore fails store open when a structural change needs explicit intent and
-you did not provide it.
-
-Typical examples:
-
-- a previously persisted kind disappears from the registry
-- a kind changes tag without a matching `retag(...)`
-- the planner describes a contradictory or irrelevant operation
-
-This fail-closed behavior is intentional.
-
-## What stays automatic
-
-Not every declaration change needs a structural migration.
-
-kindstore can still reconcile derived query support automatically when you add,
-remove, or change declared indexes. The explicit planner is reserved for changes
-that affect ownership, deletion, or tagged identity.
-
-## A useful decision rule
+## Choose the right kind of migration
 
 Ask this question:
 
 Does this change alter which rows belong to which kind, or how those rows are
 identified?
 
-If the answer is yes, you probably need store-level schema migration.
+- Yes: use top-level `migrate(planner)`.
+- No: it is probably a payload migration or an automatic derived-structure
+  change.
 
-If the answer is no, it is probably either:
+## Planner operations
 
-- a payload migration, or
-- an automatically derived structural change
+- `rename(previousKindKey, nextKindKey)`: current kind continues a previous
+  kind under a new registry key.
+- `drop(previousKindKey)`: explicitly remove a previous kind.
+- `retag(kindKey, previousTag)`: keep the same logical kind but change the ID
+  tag prefix.
 
-For example:
+## Keep in mind
 
-- adding `updatedAt` to a task payload is a payload migration
-- adding an index for `status` is an automatically derived structural change
-- renaming `tasks` to `workItems` is a structural migration
+- kindstore fails store open when this intent is required but missing.
+- Tag changes are structural because the tag is part of persisted identity.
+- Index additions or removals are still automatic derived-structure changes.
+
+## Executable references
+
+The best runnable examples for this topic are the structural migration tests:
+
+- [test/kindstore.e2e.test.ts](../../test/kindstore.e2e.test.ts):
+  `requires an explicit schema migration for a missing previous kind`
+- [test/kindstore.e2e.test.ts](../../test/kindstore.e2e.test.ts):
+  `renames a previous kind when authorized by migrate`
+- [test/kindstore.e2e.test.ts](../../test/kindstore.e2e.test.ts):
+  `drops a previous kind when authorized by migrate`
+- [test/kindstore.e2e.test.ts](../../test/kindstore.e2e.test.ts):
+  `retags a kind when authorized by migrate`
+- [test/kindstore.e2e.test.ts](../../test/kindstore.e2e.test.ts):
+  `rolls back failed schema reconciliation without mutating the existing store`
 
 ## Next
 
