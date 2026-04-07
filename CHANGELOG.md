@@ -3,6 +3,7 @@
 ## 0.4.3
 
 - Added store-level `db.resolve(id)`, which inspects a tagged document ID and dispatches the read to the matching collection while preserving kind-specific return types.
+- Fixed the published package contents to include `docs/` and `examples/`, so downstream users and installed skills can route to the packaged documentation surfaces.
 
 ## 0.4.2
 

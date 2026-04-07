@@ -21,7 +21,9 @@
     "url": "git+https://github.com/alloc/kindstore.git"
   },
   "files": [
-    "dist"
+    "dist",
+    "docs",
+    "examples"
   ],
   "type": "module",
   "sideEffects": false,
