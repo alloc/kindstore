@@ -132,6 +132,8 @@ type PageCursorData = {
   id: string;
 };
 
+type WriteMode = "create" | "replace";
+
 /**
  * Typed collection API for one declared kind.
  */
@@ -650,7 +652,7 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
         }
         updateRow.run(
           JSON.stringify(
-            applyManagedTimestamps(definition, value, parseRowData(row.data), now, false),
+            applyManagedTimestamps(definition, value, parseRowData(row.data), now, "replace"),
           ),
           row.id,
         );
@@ -696,9 +698,9 @@ class KindCollectionRuntime<T extends Kind> implements KindCollection<T> {
 
   create(value: KindInput<T>) {
     const id = this.newId();
-    const parsed = this.prepareStoredValue(value, undefined, true, Date.now());
+    const parsed = this.prepareStoredValue(value, undefined, "create", Date.now());
     this.createStatement.run(id, JSON.stringify(parsed));
-    return this.attachId(id, parsed);
+    return { id, ...parsed } as KindOutput<T>;
   }
 
   get(id: KindId<T>) {
@@ -711,9 +713,13 @@ class KindCollectionRuntime<T extends Kind> implements KindCollection<T> {
     assertTaggedId(this.definition.definition.tag, id);
     return this.database.transaction(() => {
       const row = this.getStatement.get(id) as StoredRow | undefined;
-      const parsed = this.prepareStoredValue(value, row ? parseRowData(row.data) : undefined, !row);
+      const parsed = this.prepareStoredValue(
+        value,
+        row ? parseRowData(row.data) : undefined,
+        row ? "replace" : "create",
+      );
       this.putStatement.run(id, JSON.stringify(parsed));
-      return this.attachId(id, parsed);
+      return { id, ...parsed } as KindOutput<T>;
     })();
   }
 
@@ -735,15 +741,15 @@ class KindCollectionRuntime<T extends Kind> implements KindCollection<T> {
       const row = rows[0];
       if (!row) {
         const id = this.newId();
-        const parsed = this.prepareStoredValue(value, undefined, true, Date.now());
+        const parsed = this.prepareStoredValue(value, undefined, "create", Date.now());
         assertSelectorMatchesValue(this.definition, selectorEntries, parsed);
         this.createStatement.run(id, JSON.stringify(parsed));
-        return this.attachId(id, parsed);
+        return { id, ...parsed } as KindOutput<T>;
       }
-      const parsed = this.prepareStoredValue(value, parseRowData(row.data), false);
+      const parsed = this.prepareStoredValue(value, parseRowData(row.data), "replace");
       assertSelectorMatchesValue(this.definition, selectorEntries, parsed);
       this.putStatement.run(row.id, JSON.stringify(parsed));
-      return this.attachId(row.id as KindId<T>, parsed);
+      return { id: row.id as KindId<T>, ...parsed } as KindOutput<T>;
     })();
   }
 
@@ -767,9 +773,9 @@ class KindCollectionRuntime<T extends Kind> implements KindCollection<T> {
         typeof updater === "function"
           ? (updater(current) as Record<string, unknown>)
           : ({ ...current, ...updater } as Record<string, unknown>);
-      const parsed = this.prepareStoredValue(nextValue, parseRowData(row.data), false);
+      const parsed = this.prepareStoredValue(nextValue, parseRowData(row.data), "replace");
       this.updateStatement.run(JSON.stringify(parsed), id);
-      return this.attachId(id, parsed);
+      return { id, ...parsed } as KindOutput<T>;
     })();
   }
 
@@ -827,24 +833,18 @@ class KindCollectionRuntime<T extends Kind> implements KindCollection<T> {
   }
 
   private parseRow(row: StoredRow) {
-    return this.attachId(row.id as KindId<T>, this.parseRowData(row));
-  }
-
-  private parseRowData(row: StoredRow) {
-    return this.definition.definition.schema.parse(parseRowData(row.data));
-  }
-
-  private attachId(id: KindId<T>, value: Record<string, unknown>) {
-    return { id, ...value } as KindOutput<T>;
+    const value = this.definition.definition.schema.parse(parseRowData(row.data));
+    return { id: row.id as KindId<T>, ...value } as KindOutput<T>;
   }
 
   private prepareStoredValue(
     value: Record<string, unknown>,
     current: Record<string, unknown> | undefined,
-    insert: boolean,
+    mode: WriteMode,
     now = Date.now(),
   ) {
-    return applyManagedTimestamps(this.definition, stripDocumentId(value), current, now, insert);
+    const { id: _id, ...rowData } = value;
+    return applyManagedTimestamps(this.definition, rowData, current, now, mode);
   }
 
   private compileSelect(options: FindManyOptions<T>) {
@@ -1247,7 +1247,7 @@ function normalizeColumns<T extends Kind>(definition: KindBuilder<T>) {
   const seenColumns = new Set<string>();
   for (const index of definition.indexes.values()) {
     assertTopLevelField(definition.tag, shape, index.field);
-    const column = columnName(index.field);
+    const column = snakeCase(index.field);
     if (seenColumns.has(column)) {
       throw new Error(
         `Kind "${definition.tag}" has multiple indexed fields that map to column "${column}".`,
@@ -1279,7 +1279,7 @@ function normalizeColumns<T extends Kind>(definition: KindBuilder<T>) {
         continue;
       }
       assertTopLevelField(definition.tag, shape, field);
-      const column = columnName(field);
+      const column = snakeCase(field);
       if (seenColumns.has(column)) {
         throw new Error(
           `Kind "${definition.tag}" has multiple indexed fields that map to column "${column}".`,
@@ -1720,10 +1720,6 @@ function decodePageCursor(cursor: string): PageCursorData {
   };
 }
 
-function columnName(field: string) {
-  return snakeCase(field);
-}
-
 function snapshotKind<T extends Kind>(definition: KindRuntimeDefinition<T>): SnapshotKind {
   const columns: SnapshotKind["columns"] = {};
   for (const column of definition.columns.values()) {
@@ -1775,13 +1771,13 @@ function applyManagedTimestamps<T extends Kind>(
   value: Record<string, unknown>,
   current: Record<string, unknown> | undefined,
   now: number,
-  insert: boolean,
+  mode: WriteMode,
 ) {
   const next = { ...value };
   if (definition.createdAtField) {
     if (current && Object.hasOwn(current, definition.createdAtField)) {
       next[definition.createdAtField] = current[definition.createdAtField];
-    } else if (insert) {
+    } else if (mode === "create") {
       next[definition.createdAtField] = now;
     } else {
       delete next[definition.createdAtField];
@@ -1791,9 +1787,4 @@ function applyManagedTimestamps<T extends Kind>(
     next[definition.updatedAtField] = now;
   }
   return definition.definition.schema.parse(next);
-}
-
-function stripDocumentId(value: Record<string, unknown>) {
-  const { id: _id, ...rowData } = value;
-  return rowData;
 }
