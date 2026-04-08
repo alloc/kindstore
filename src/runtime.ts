@@ -61,12 +61,19 @@ type IndexColumn = {
   column: string;
   type: SqliteTypeHint;
   single: boolean;
+  unique: boolean;
+};
+
+type UniqueIndexDefinition = {
+  name: string;
+  fields: readonly string[];
 };
 
 type KindRuntimeDefinition<T extends Kind> = {
   key: string;
   table: string;
   columns: Map<string, IndexColumn>;
+  uniqueIndexes: readonly UniqueIndexDefinition[];
   createdAtField?: KindManagedCreatedAt<T>;
   updatedAtField?: KindManagedUpdatedAt<T>;
   definition: KindBuilder<T>;
@@ -75,6 +82,7 @@ type KindRuntimeDefinition<T extends Kind> = {
 type SnapshotIndex = {
   sqliteName: string;
   columns: readonly string[];
+  unique?: boolean;
 };
 
 type SnapshotKind = {
@@ -531,7 +539,11 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
     if (previous) {
       for (const index of Object.values(previous.indexes)) {
         const next = current[index.sqliteName];
-        if (next && sameColumns(index.columns, next.columns)) {
+        if (
+          next &&
+          (index.unique ?? false) === (next.unique ?? false) &&
+          sameColumns(index.columns, next.columns)
+        ) {
           continue;
         }
         this.database.run(`DROP INDEX IF EXISTS ${quoteIdentifier(index.sqliteName)}`);
@@ -539,7 +551,7 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
     }
     for (const index of Object.values(current)) {
       this.database.run(
-        `CREATE INDEX IF NOT EXISTS ${quoteIdentifier(index.sqliteName)} ON ${quoteIdentifier(definition.table)} (${index.columns.join(", ")})`,
+        `CREATE${index.unique ? " UNIQUE" : ""} INDEX IF NOT EXISTS ${quoteIdentifier(index.sqliteName)} ON ${quoteIdentifier(definition.table)} (${index.columns.join(", ")})`,
       );
     }
   }
@@ -1048,6 +1060,7 @@ class InternalMetadataRuntime {
           !isRecord(index) ||
           index.sqliteName !== indexName ||
           !Array.isArray(index.columns) ||
+          (index.unique != null && typeof index.unique !== "boolean") ||
           index.columns.some((column) => typeof column !== "string")
         ) {
           throw new UnrecoverableStoreOpenError(
@@ -1185,6 +1198,7 @@ function normalizeKinds<TKinds extends KindRegistry>(kinds: TKinds) {
       key,
       table,
       columns: normalizeColumns(value),
+      uniqueIndexes: normalizeUniqueIndexes(value),
       createdAtField: value.createdAtField,
       updatedAtField: value.updatedAtField,
       definition: value,
@@ -1210,6 +1224,7 @@ function normalizeColumns<T extends Kind>(definition: KindBuilder<T>) {
       field: index.field,
       column,
       single: index.single,
+      unique: index.unique,
       type: index.type ?? inferSqliteType(shape[index.field], definition.tag, index.field),
     });
   }
@@ -1224,6 +1239,7 @@ function normalizeColumns<T extends Kind>(definition: KindBuilder<T>) {
           field,
           column: "id",
           single: false,
+          unique: false,
           type: "text",
         });
         continue;
@@ -1240,11 +1256,59 @@ function normalizeColumns<T extends Kind>(definition: KindBuilder<T>) {
         field,
         column,
         single: false,
+        unique: false,
         type: inferSqliteType(shape[field], definition.tag, field),
       });
     }
   }
   return columns;
+}
+
+function normalizeUniqueIndexes<T extends Kind>(definition: KindBuilder<T>) {
+  const shape = definition.schema.shape as Record<string, unknown>;
+  const uniqueIndexes: UniqueIndexDefinition[] = [];
+  const seenFieldSets = new Set<string>();
+
+  for (const index of definition.indexes.values()) {
+    if (!index.unique) {
+      continue;
+    }
+    assertTopLevelField(definition.tag, shape, index.field);
+    const fields = [index.field];
+    const key = fields.slice().sort().join("\0");
+    if (seenFieldSets.has(key)) {
+      continue;
+    }
+    seenFieldSets.add(key);
+    uniqueIndexes.push({
+      name: index.field,
+      fields,
+    });
+  }
+
+  for (const multiIndex of definition.multiIndexes) {
+    if (!multiIndex.unique) {
+      continue;
+    }
+    const fields = multiIndex.fields.map(([field]) => field);
+    for (const field of fields) {
+      if (field === "id") {
+        continue;
+      }
+      assertTopLevelField(definition.tag, shape, field);
+    }
+    const key = fields.slice().sort().join("\0");
+    if (seenFieldSets.has(key)) {
+      continue;
+    }
+    seenFieldSets.add(key);
+    uniqueIndexes.push({
+      name: multiIndex.name,
+      fields,
+    });
+  }
+
+  return uniqueIndexes;
 }
 
 function assertTopLevelField(tag: string, shape: Record<string, unknown>, field: string) {
@@ -1585,6 +1649,7 @@ function snapshotIndexes<T extends Kind>(definition: KindRuntimeDefinition<T>) {
     indexes[sqliteName] = {
       sqliteName,
       columns: [quoteIdentifier(column.column)],
+      unique: column.unique,
     };
   }
   for (const multiIndex of definition.definition.multiIndexes) {
@@ -1595,6 +1660,7 @@ function snapshotIndexes<T extends Kind>(definition: KindRuntimeDefinition<T>) {
         ([field, direction]) =>
           `${quoteIdentifier(definition.columns.get(field)!.column)} ${direction.toUpperCase()}`,
       ),
+      unique: multiIndex.unique,
     };
   }
   return indexes;

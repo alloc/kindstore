@@ -205,6 +205,18 @@ paths are:
 - narrow with declared queryable fields and finish in application code, or
 - use raw SQL directly
 
+## Unique index semantics
+
+Kinds may declare unique indexes through `.index(..., { unique: true })` or
+`.multi(..., ..., { unique: true })`.
+
+The durable contract is:
+
+- uniqueness is enforced by SQLite, not emulated in application code
+- single-field and composite unique indexes use the same declared query fields
+- if existing stored rows violate a newly declared unique index, store open or
+  later writes fail rather than silently choosing a winner
+
 ## Ordering semantics
 
 Ordering is only meaningful on explicitly queryable fields.

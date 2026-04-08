@@ -126,10 +126,14 @@ test("type-level validation of multi-only query fields", () => {
       updatedAt: z.number().int(),
       status: z.enum(["active", "inactive"]),
     }),
-  ).multi("user_updatedAt", {
-    userId: "asc",
-    updatedAt: "desc",
-  });
+  ).multi(
+    "user_updatedAt",
+    {
+      userId: "asc",
+      updatedAt: "desc",
+    },
+    { unique: true },
+  );
 
   type ActivityBag = typeof activityKind extends KindBuilder<infer B extends Kind> ? B : never;
 
@@ -204,7 +208,7 @@ test("type-level validation of kindstore constructor", () => {
     },
     schema: {
       tasks: kind("tsk", Task).index("status"),
-      users: kind("usr", User),
+      users: kind("usr", User).index("email", { unique: true }),
     },
   });
 
@@ -225,9 +229,7 @@ test("type-level validation of kindstore constructor", () => {
     title: string;
     status: "todo" | "doing" | "done";
   }>();
-  expectTypeOf(
-    db.resolve(db.tasks.newId()),
-  ).toEqualTypeOf<
+  expectTypeOf(db.resolve(db.tasks.newId())).toEqualTypeOf<
     | {
         id: `tsk_${string}`;
         title: string;

@@ -56,6 +56,8 @@ Runnable usage lives in [examples/basic-usage.ts](../examples/basic-usage.ts),
 
 - Define a collection: `kind(tag, schema)` plus `.index(...)`, `.multi(...)`,
   `.createdAt()`, or `.updatedAt()` as needed.
+- Enforce a natural key: use `.index(..., { unique: true })` or
+  `.multi(..., ..., { unique: true })`.
 - Open a store: `kindstore({ filename, schema, metadata, migrate })`.
 - Let kindstore allocate IDs: `create(value)`.
 - Allocate an ID before writing: `newId()` then `put(id, value)`.
@@ -75,6 +77,8 @@ Runnable usage lives in [examples/basic-usage.ts](../examples/basic-usage.ts),
 
 - Queryable fields are top-level payload fields declared through `.index(...)`
   or `.multi(...)`, plus `id` when it participates in `.multi(...)`.
+- Declared unique indexes are enforced by SQLite at write time and during store
+  open when kindstore reconciles schema state.
 - Tags are part of persisted identity. Changing a tag is a structural
   migration, not a cosmetic rename.
 - `id` is store-owned and `data` is reserved for storage.

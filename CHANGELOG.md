@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.0
+
+- Added declared unique index support through `.index(..., { unique: true })` and `.multi(..., ..., { unique: true })`.
+
 ## 0.4.3
 
 - Added store-level `db.resolve(id)`, which inspects a tagged document ID and dispatches the read to the matching collection while preserving kind-specific return types.

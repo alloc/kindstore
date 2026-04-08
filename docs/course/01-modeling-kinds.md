@@ -33,12 +33,16 @@ is the storage identity embedded in document IDs.
 - Add `.createdAt()` or `.updatedAt()` only when the store should own those
   payload fields.
 - Add `.multi(...)` only for real filter-plus-sort patterns you expect to run.
+- Add `{ unique: true }` only when a declared field set should identify at most
+  one document.
 
 ## Keep in mind
 
 - `.updatedAt()` and `.createdAt()` control assignment policy, not queryability.
   Add `.index(...)` too when you need typed filtering or ordering.
 - `.multi(...)` can include top-level payload fields and `id`.
+- `.index(...)` and `.multi(...)` can also declare uniqueness when SQLite
+  should reject duplicate values for that field set.
 - SQLite type hints are optional unless inference cannot determine the affinity
   you want.
 

@@ -10,6 +10,8 @@ Use this skill as a router, not as the primary documentation surface.
 - Read `node_modules/kindstore/README.md` for the documentation map.
 - Read `node_modules/kindstore/docs/context.md` for the stable mental model,
   constraints, and task-to-API map.
+- Read `node_modules/kindstore/docs/query-and-collection-semantics.md` for
+  caller-visible query, write, and unique-index behavior.
 - Run `node_modules/kindstore/examples/basic-usage.ts`,
   `node_modules/kindstore/examples/indexed-queries.ts`, and
   `node_modules/kindstore/examples/metadata-and-batch.ts` for canonical

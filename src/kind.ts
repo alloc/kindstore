@@ -22,11 +22,13 @@ type IndexDefinition = {
   field: string;
   type?: SqliteTypeHint;
   single: boolean;
+  unique: boolean;
 };
 
 type MultiIndexDefinition = {
   name: string;
   fields: readonly [string, IndexDirection][];
+  unique: boolean;
 };
 
 type ExtendSchema<TSchema extends z.ZodObject<any>, TKey extends string> =
@@ -83,12 +85,16 @@ export class KindBuilder<T extends Kind> {
    * Pass `options.type` only when SQLite type inference from the Zod field is
    * not the affinity you want.
    */
-  index<TKey extends KindPropertyKey<T>>(field: TKey, options: { type?: SqliteTypeHint } = {}) {
+  index<TKey extends KindPropertyKey<T>>(
+    field: TKey,
+    options: { type?: SqliteTypeHint; unique?: boolean } = {},
+  ) {
     const current = this.indexes.get(field);
     this.indexes.set(field, {
       field,
       single: true,
       type: options.type ?? current?.type,
+      unique: options.unique ?? current?.unique ?? false,
     });
     return this as unknown as KindBuilder<Omit<T, "indexed"> & { indexed: T["indexed"] | TKey }>;
   }
@@ -148,6 +154,7 @@ export class KindBuilder<T extends Kind> {
   multi<const TName extends string, const TFields extends MultiIndexFields<T>>(
     name: TName,
     fields: ExactFieldKeys<TFields, KindPropertyKey<T> | "id">,
+    options: { unique?: boolean } = {},
   ) {
     const entries = Object.entries(fields) as [string, IndexDirection][];
     if (!entries.length) {
@@ -156,6 +163,7 @@ export class KindBuilder<T extends Kind> {
     this.multiIndexes.push({
       name,
       fields: entries,
+      unique: options.unique ?? false,
     });
     return this as unknown as KindBuilder<
       Omit<T, "indexed"> & { indexed: T["indexed"] | (keyof TFields & string) }
