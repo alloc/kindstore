@@ -14,8 +14,9 @@ Use this skill as a router, not as the primary documentation surface.
   caller-visible query, write, unique-index, and `putByUnique(...)` behavior.
 - Run `node_modules/kindstore/examples/basic-usage.ts`,
   `node_modules/kindstore/examples/indexed-queries.ts`, and
-  `node_modules/kindstore/examples/metadata-and-batch.ts` for canonical
-  runnable workflows.
+  `node_modules/kindstore/examples/metadata-and-batch.ts`, and
+  `node_modules/kindstore/examples/unique-writes.ts` for canonical runnable
+  workflows.
 - Follow `node_modules/kindstore/docs/course/README.md` for the short
   sequenced learning path.
 - Use `node_modules/kindstore/dist/index.d.mts` for exact exported signatures.

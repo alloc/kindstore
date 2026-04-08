@@ -109,7 +109,13 @@ export type KindWhere<T extends KindLike> = Partial<{
   [K in KindIndexedField<T>]: WhereOperand<KindFieldValue<T, K>>;
 }>;
 
-/** Exact-match selector shape accepted by `putByUnique`. */
+/**
+ * Exact-match selector shape accepted by `putByUnique`.
+ *
+ * @remarks
+ * Runtime validation still requires the selector to match one declared unique
+ * index exactly.
+ */
 export type KindUniqueSelector<T extends KindLike> = Partial<{
   [K in KindUniqueField<T>]: KindUniqueFieldValue<T, K>;
 }>;

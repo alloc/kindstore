@@ -144,7 +144,15 @@ export type KindCollection<T extends Kind> = {
   get(id: KindId<T>): KindOutput<T> | undefined;
   /** Replaces the stored payload for `id`, inserting on the first write. */
   put(id: KindId<T>, value: KindInput<T>): KindOutput<T>;
-  /** Replaces the document identified by one declared unique selector, creating it when absent. */
+  /**
+   * Replaces the document identified by one declared unique selector, creating
+   * it when absent.
+   *
+   * @remarks
+   * The selector must use exact non-null values and must match one declared
+   * unique index exactly. The provided value must preserve the selected unique
+   * fields.
+   */
   putByUnique(selector: KindUniqueSelector<T>, value: KindInput<T>): KindOutput<T>;
   /** Removes one document and returns whether anything was deleted. */
   delete(id: KindId<T>): boolean;

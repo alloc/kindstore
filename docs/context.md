@@ -7,7 +7,8 @@ typed query model, and then work through one typed collection per kind.
 Exact exported signatures live in [../dist/index.d.mts](../dist/index.d.mts).
 Runnable usage lives in [examples/basic-usage.ts](../examples/basic-usage.ts),
 [examples/indexed-queries.ts](../examples/indexed-queries.ts), and
-[examples/metadata-and-batch.ts](../examples/metadata-and-batch.ts).
+[examples/metadata-and-batch.ts](../examples/metadata-and-batch.ts), and
+[examples/unique-writes.ts](../examples/unique-writes.ts).
 
 # When to Use
 

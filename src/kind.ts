@@ -83,7 +83,8 @@ export class KindBuilder<T extends Kind> {
    *
    * @remarks
    * Pass `options.type` only when SQLite type inference from the Zod field is
-   * not the affinity you want.
+   * not the affinity you want. Pass `options.unique` when SQLite should reject
+   * duplicate values for that field.
    */
   index<TKey extends KindPropertyKey<T>>(
     field: TKey,
@@ -150,6 +151,9 @@ export class KindBuilder<T extends Kind> {
   /**
    * Declares a composite index over top-level payload fields and, optionally,
    * the store-owned `id`.
+   *
+   * @remarks
+   * Pass `options.unique` when the field set should identify at most one row.
    */
   multi<const TName extends string, const TFields extends MultiIndexFields<T>>(
     name: TName,

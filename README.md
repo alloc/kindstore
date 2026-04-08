@@ -60,7 +60,8 @@ db.close();
 - Run the examples in
   [examples/basic-usage.ts](./examples/basic-usage.ts),
   [examples/indexed-queries.ts](./examples/indexed-queries.ts), and
-  [examples/metadata-and-batch.ts](./examples/metadata-and-batch.ts).
+  [examples/metadata-and-batch.ts](./examples/metadata-and-batch.ts), and
+  [examples/unique-writes.ts](./examples/unique-writes.ts).
 - Follow [docs/course/README.md](./docs/course/README.md) for the guided
   learning path.
 - Use [dist/index.d.mts](./dist/index.d.mts) for exact exported signatures.

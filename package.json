@@ -34,7 +34,7 @@
   "scripts": {
     "dev": "tsdown --sourcemap --watch",
     "build": "tsdown",
-    "docs:check": "pnpm build && bun run examples/basic-usage.ts && bun run examples/indexed-queries.ts && bun run examples/metadata-and-batch.ts",
+    "docs:check": "pnpm build && bun run examples/basic-usage.ts && bun run examples/indexed-queries.ts && bun run examples/metadata-and-batch.ts && bun run examples/unique-writes.ts",
     "format": "oxfmt .",
     "lint": "oxlint src",
     "test": "bun test",
