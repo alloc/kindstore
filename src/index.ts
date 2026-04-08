@@ -22,6 +22,7 @@ export type {
   KindPageCursor,
   KindPropertyKey,
   KindRegistry,
+  KindUniqueSelector,
   KindWhere,
   MetadataDefinitionMap,
   MetadataValue,

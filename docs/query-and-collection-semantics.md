@@ -33,6 +33,7 @@ Each collection provides:
 - `create(value)`
 - `get(id)`
 - `put(id, value)`
+- `putByUnique(selector, value)`
 - `update(id, updater)`
 - `delete(id)`
 - `first(options?)`
@@ -142,6 +143,24 @@ The durable behavior is replacement-oriented:
   assigns a fresh value for that field
 
 `put` returns the validated stored value, including the store-owned `id`.
+
+### `putByUnique(selector, value)`
+
+`putByUnique` performs an atomic create-or-replace through one declared unique
+index.
+
+The durable behavior is:
+
+- the selector must use exact non-null values, not range or membership
+  operators
+- the selector must exactly match one declared unique index
+- if no row matches, kindstore allocates a fresh tagged ID and creates one new
+  document
+- if one row matches, kindstore replaces that row's payload in place
+- the provided value must preserve the selected unique fields
+
+If it succeeds, `putByUnique` returns the validated stored value, including the
+store-owned `id`.
 
 ### `update(id, updater)`
 

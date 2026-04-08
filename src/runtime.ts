@@ -18,6 +18,7 @@ import type {
   KindOutput,
   KindPageCursor,
   KindRegistry,
+  KindUniqueSelector,
   KindWhere,
   MetadataDefinitionMap,
   MetadataValue,
@@ -143,6 +144,8 @@ export type KindCollection<T extends Kind> = {
   get(id: KindId<T>): KindOutput<T> | undefined;
   /** Replaces the stored payload for `id`, inserting on the first write. */
   put(id: KindId<T>, value: KindInput<T>): KindOutput<T>;
+  /** Replaces the document identified by one declared unique selector, creating it when absent. */
+  putByUnique(selector: KindUniqueSelector<T>, value: KindInput<T>): KindOutput<T>;
   /** Removes one document and returns whether anything was deleted. */
   delete(id: KindId<T>): boolean;
   /** Performs an atomic read-modify-write using a shallow patch or updater. */
@@ -710,6 +713,36 @@ class KindCollectionRuntime<T extends Kind> implements KindCollection<T> {
       const parsed = this.prepareStoredValue(value, row ? parseRowData(row.data) : undefined, !row);
       this.putStatement.run(id, JSON.stringify(parsed));
       return this.attachId(id, parsed);
+    })();
+  }
+
+  putByUnique(selector: KindUniqueSelector<T>, value: KindInput<T>) {
+    const selectorEntries = normalizeUniqueSelector(this.definition, selector);
+    assertMatchesDeclaredUniqueIndex(this.definition, selectorEntries);
+    return this.database.transaction(() => {
+      const where = compileWhere(
+        this.definition.columns,
+        Object.fromEntries(selectorEntries) as KindWhere<T>,
+      );
+      const sql = `SELECT "id", "data" FROM ${quoteIdentifier(this.definition.table)}${where.sql} LIMIT 2`;
+      const rows = this.database.query(sql).all(...where.values) as StoredRow[];
+      if (rows.length > 1) {
+        throw new Error(
+          `putByUnique() selector for kind "${this.definition.key}" matched multiple rows.`,
+        );
+      }
+      const row = rows[0];
+      if (!row) {
+        const id = this.newId();
+        const parsed = this.prepareStoredValue(value, undefined, true, Date.now());
+        assertSelectorMatchesValue(this.definition, selectorEntries, parsed);
+        this.createStatement.run(id, JSON.stringify(parsed));
+        return this.attachId(id, parsed);
+      }
+      const parsed = this.prepareStoredValue(value, parseRowData(row.data), false);
+      assertSelectorMatchesValue(this.definition, selectorEntries, parsed);
+      this.putStatement.run(row.id, JSON.stringify(parsed));
+      return this.attachId(row.id as KindId<T>, parsed);
     })();
   }
 
@@ -1309,6 +1342,76 @@ function normalizeUniqueIndexes<T extends Kind>(definition: KindBuilder<T>) {
   }
 
   return uniqueIndexes;
+}
+
+function normalizeUniqueSelector<T extends Kind>(
+  definition: KindRuntimeDefinition<T>,
+  selector: KindUniqueSelector<T>,
+) {
+  const entries = Object.entries(selector as Record<string, unknown>);
+  if (!entries.length) {
+    throw new Error(`putByUnique() for kind "${definition.key}" requires a non-empty selector.`);
+  }
+  for (const [field, value] of entries) {
+    if (field === "id") {
+      throw new Error(
+        `putByUnique() for kind "${definition.key}" does not support selector field "id".`,
+      );
+    }
+    if (value == null) {
+      throw new Error(
+        `putByUnique() selector field "${field}" for kind "${definition.key}" must be non-null.`,
+      );
+    }
+    if (isFilterOperators(value)) {
+      throw new Error(
+        `putByUnique() selector field "${field}" for kind "${definition.key}" must use exact values, not filter operators.`,
+      );
+    }
+  }
+  return entries as Array<readonly [field: string, value: unknown]>;
+}
+
+function assertMatchesDeclaredUniqueIndex<T extends Kind>(
+  definition: KindRuntimeDefinition<T>,
+  selectorEntries: Array<readonly [field: string, value: unknown]>,
+) {
+  const selectorFields = selectorEntries.map(([field]) => field);
+  const match = definition.uniqueIndexes.some((index) => sameFields(index.fields, selectorFields));
+  if (match) {
+    return;
+  }
+  throw new Error(
+    `putByUnique() selector for kind "${definition.key}" must exactly match one declared unique index.`,
+  );
+}
+
+function sameFields(left: readonly string[], right: readonly string[]) {
+  if (left.length !== right.length) {
+    return false;
+  }
+  const remaining = new Set(left);
+  for (const field of right) {
+    if (!remaining.delete(field)) {
+      return false;
+    }
+  }
+  return remaining.size === 0;
+}
+
+function assertSelectorMatchesValue<T extends Kind>(
+  definition: KindRuntimeDefinition<T>,
+  selectorEntries: Array<readonly [field: string, value: unknown]>,
+  value: KindOutput<T> | Record<string, unknown>,
+) {
+  for (const [field, expected] of selectorEntries) {
+    if (Object.is((value as Record<string, unknown>)[field], expected)) {
+      continue;
+    }
+    throw new Error(
+      `putByUnique() value for kind "${definition.key}" must preserve selector field "${field}".`,
+    );
+  }
 }
 
 function assertTopLevelField(tag: string, shape: Record<string, unknown>, field: string) {

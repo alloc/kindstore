@@ -35,7 +35,8 @@ Runnable usage lives in [examples/basic-usage.ts](../examples/basic-usage.ts),
 - Kind: built with `kind(tag, schema)`; combines a stable tag, a Zod object
   schema, declared queryable fields, and an optional payload migration history.
 - Collection: `db.<kindKey>`; exposes `newId`, `create`, `get`, `put`,
-  `update`, `delete`, `first`, `findMany`, `findPage`, and `iterate`.
+  `putByUnique`, `update`, `delete`, `first`, `findMany`, `findPage`, and
+  `iterate`.
 - Metadata: `db.metadata`; stores small typed store-scoped values such as sync
   cursors or preferences.
 - Migrations: kind-level `.migrate(version, steps)` rewrites persisted payloads;
@@ -62,6 +63,7 @@ Runnable usage lives in [examples/basic-usage.ts](../examples/basic-usage.ts),
 - Let kindstore allocate IDs: `create(value)`.
 - Allocate an ID before writing: `newId()` then `put(id, value)`.
 - Replace a full document: `put(id, value)`.
+- Replace or create by a natural key: `putByUnique(selector, value)`.
 - Apply a shallow or computed change: `update(id, patch)` or `update(id, fn)`.
 - Read by known collection: `get(id)`, `first(...)`, `findMany(...)`,
   `iterate(...)`, or `findPage(...)`.

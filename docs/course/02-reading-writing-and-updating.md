@@ -11,6 +11,8 @@ canonical workflow, then use this page to choose the right operation.
 - `newId()` then `put(id, value)`: use this when the caller needs the ID before
   the write happens.
 - `put(id, value)`: replacement write for the full next document.
+- `putByUnique(selector, value)`: replacement write keyed by one declared
+  unique field set, creating the document when it does not exist yet.
 - `update(id, patch)`: shallow partial update.
 - `update(id, fn)`: computed next value based on the current stored document.
 - `delete(id)`: remove one document and get a `boolean` back.
@@ -25,6 +27,8 @@ canonical workflow, then use this page to choose the right operation.
 ## Keep in mind
 
 - `put()` is not a merge helper. Omitted fields are replaced away.
+- `putByUnique()` is not a general query-write helper. The selector must match
+  one declared unique index exactly.
 - Collection methods are tag-aware, so IDs must belong to the matching kind.
 - `id` is store-owned and `data` is reserved for storage.
 - Exact signatures and examples now live outside the course:

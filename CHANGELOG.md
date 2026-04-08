@@ -3,6 +3,7 @@
 ## 0.5.0
 
 - Added declared unique index support through `.index(..., { unique: true })` and `.multi(..., ..., { unique: true })`.
+- Added `collection.putByUnique(selector, value)` for atomic create-or-replace writes keyed by one declared unique index.
 
 ## 0.4.3
 

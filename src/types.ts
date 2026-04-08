@@ -85,6 +85,13 @@ type KindFieldValue<T extends KindLike, K extends KindIndexedField<T>> = K exten
   ? KindId<T>
   : z.output<InferKind<T>["schema"]>[K];
 
+type KindUniqueField<T extends KindLike> = Exclude<KindIndexedField<T>, "id">;
+
+type KindUniqueFieldValue<T extends KindLike, K extends KindUniqueField<T>> = Exclude<
+  KindFieldValue<T, K>,
+  undefined | null
+>;
+
 /** Comparison operators supported in typed `where` clauses. */
 export type FilterOperators<T> = {
   in?: readonly Exclude<T, undefined>[];
@@ -100,6 +107,11 @@ export type WhereOperand<T> = Exclude<T, undefined> | null | FilterOperators<T>;
 /** Typed filter object constrained to indexed fields for a kind. */
 export type KindWhere<T extends KindLike> = Partial<{
   [K in KindIndexedField<T>]: WhereOperand<KindFieldValue<T, K>>;
+}>;
+
+/** Exact-match selector shape accepted by `putByUnique`. */
+export type KindUniqueSelector<T extends KindLike> = Partial<{
+  [K in KindUniqueField<T>]: KindUniqueFieldValue<T, K>;
 }>;
 
 /** Typed ordering object constrained to indexed fields for a kind. */

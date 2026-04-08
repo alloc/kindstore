@@ -15,6 +15,7 @@ import type {
   KindOutput,
   KindPageCursor,
   KindPropertyKey,
+  KindUniqueSelector,
   KindWhere,
   MetadataValue,
   PatchValue,
@@ -77,6 +78,12 @@ test("type-level validation of core primitives", () => {
     Partial<{
       status: WhereOperand<"active" | "inactive" | undefined>;
       age: WhereOperand<number>;
+    }>
+  >();
+  expectTypeOf<KindUniqueSelector<UserBag>>().toEqualTypeOf<
+    Partial<{
+      status: "active" | "inactive";
+      age: number;
     }>
   >();
   // @ts-expect-error - 'name' is not indexed
@@ -244,6 +251,19 @@ test("type-level validation of kindstore constructor", () => {
       }
     | undefined
   >();
+  expectTypeOf(
+    db.users.putByUnique(
+      {
+        email: "jane@example.com",
+      },
+      {
+        email: "jane@example.com",
+      },
+    ),
+  ).toEqualTypeOf<{
+    id: `usr_${string}`;
+    email: string;
+  }>();
   expectTypeOf(db.metadata.get("preferences")).toEqualTypeOf<
     | {
         theme: "light" | "dark";
