@@ -83,7 +83,7 @@ type KindRuntimeDefinition<T extends Kind> = {
 type SnapshotIndex = {
   sqliteName: string;
   columns: readonly string[];
-  unique?: boolean;
+  unique: boolean;
 };
 
 type SnapshotKind = {
@@ -550,11 +550,7 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
     if (previous) {
       for (const index of Object.values(previous.indexes)) {
         const next = current[index.sqliteName];
-        if (
-          next &&
-          (index.unique ?? false) === (next.unique ?? false) &&
-          sameColumns(index.columns, next.columns)
-        ) {
+        if (next && index.unique === next.unique && sameColumns(index.columns, next.columns)) {
           continue;
         }
         this.database.run(`DROP INDEX IF EXISTS ${quoteIdentifier(index.sqliteName)}`);
@@ -650,10 +646,7 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
               `Kind "${definition.key}" is missing migration step ${currentVersion} -> ${currentVersion + 1}.`,
             );
           }
-          value = step(
-            value as Partial<ReturnType<T["schema"]["parse"]>> & Record<string, unknown>,
-            context,
-          ) as Record<string, unknown>;
+          value = step(value as any, context);
         }
         updateRow.run(
           JSON.stringify(
