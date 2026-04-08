@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { kind, kindstore } from "../src/index";
+import { kind, kindstore } from "kindstore";
 
 const Task = z.object({
   title: z.string(),
