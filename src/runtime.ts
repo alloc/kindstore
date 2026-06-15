@@ -5,6 +5,8 @@ import { UnrecoverableStoreOpenError } from "./errors";
 import { KindBuilder } from "./kind";
 import type {
   ConstraintMigration,
+  ConstraintMigrationCollection,
+  ConstraintMigrationStore,
   DatabaseOptions,
   FindManyOptions,
   FindPageOptions,
@@ -611,6 +613,26 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
       kindstoreVersion: KINDSTORE_FORMAT_VERSION,
       kinds,
     };
+  }
+
+  private createConstraintMigrationStore() {
+    const db: Record<string, ConstraintMigrationCollection<any>> = {};
+    for (const [key, definition] of this.kinds) {
+      const collection = new KindCollectionRuntime(this.database, definition);
+      db[key] = {
+        create: (value) => collection.create(value),
+        delete: (id) => collection.delete(id),
+        findMany: (options) => collection.findMany(options),
+        findPage: (options) => collection.findPage(options),
+        first: (options) => collection.first(options),
+        get: (id) => collection.get(id),
+        iterate: (options) => collection.iterate(options),
+        newId: () => collection.newId(),
+        put: (id, value) => collection.put(id, value),
+        update: (id, updater) => collection.update(id, updater),
+      };
+    }
+    return db as ConstraintMigrationStore<any>;
   }
 
   private migrateKind<T extends Kind>(definition: KindRuntimeDefinition<T>) {
