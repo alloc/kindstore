@@ -236,6 +236,37 @@ The durable contract is:
 - if existing stored rows violate a newly declared unique index, store open or
   later writes fail rather than silently choosing a winner
 
+When the application owns a safe cleanup rule for existing duplicates, register
+a store-level `m.prepareConstraints(id, fn)` migration in the same release that
+adds the unique index:
+
+```ts
+const db = kindstore({
+  filename,
+  migrate(m) {
+    m.prepareConstraints("2026-06-dedupe-user-email", ({ db }) => {
+      const seen = new Set<string>();
+      for (const user of db.users.findMany({ orderBy: { email: "asc" } })) {
+        if (seen.has(user.email)) {
+          db.users.delete(user.id);
+          continue;
+        }
+        seen.add(user.email);
+      }
+    });
+  },
+  schema: {
+    users: kind("usr", User).index("email", { unique: true }),
+  },
+});
+```
+
+`prepareConstraints` runs during store open after current tables and generated
+columns exist, but before declared indexes and unique constraints are
+materialized. The callback is explicit, tracked by id, and transactional with
+the rest of startup. Its collection surface intentionally omits `putByUnique`;
+use `raw` for repairs that need SQL or cannot parse through the current schema.
+
 ## Ordering semantics
 
 Ordering is only meaningful on explicitly queryable fields.

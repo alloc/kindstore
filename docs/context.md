@@ -41,7 +41,8 @@ Runnable usage lives in [examples/basic-usage.ts](../examples/basic-usage.ts),
 - Metadata: `db.metadata`; stores small typed store-scoped values such as sync
   cursors or preferences.
 - Migrations: kind-level `.migrate(version, steps)` rewrites persisted payloads;
-  store-level `migrate(planner)` handles renames, drops, and tag changes.
+  store-level `migrate(planner)` handles renames, drops, tag changes, and
+  named `prepareConstraints` repairs before constraints are materialized.
 
 # Data Flow / Lifecycle
 
@@ -60,6 +61,9 @@ Runnable usage lives in [examples/basic-usage.ts](../examples/basic-usage.ts),
   `.createdAt()`, or `.updatedAt()` as needed.
 - Enforce a natural key: use `.index(..., { unique: true })` or
   `.multi(..., ..., { unique: true })`.
+- Add a unique index to existing data with duplicates: register
+  `m.prepareConstraints(id, fn)` to repair rows during open before the new
+  constraint is created.
 - Open a store: `kindstore({ filename, schema, metadata, migrate })`.
 - Let kindstore allocate IDs: `create(value)`.
 - Allocate an ID before writing: `newId()` then `put(id, value)`.
@@ -75,6 +79,8 @@ Runnable usage lives in [examples/basic-usage.ts](../examples/basic-usage.ts),
 - Rewrite old payloads: `.migrate(version, steps)` on the kind.
 - Rename, drop, or retag kinds: top-level `migrate(planner)` when opening the
   store.
+- Repair rows before new constraints: top-level
+  `migrate((m) => m.prepareConstraints(id, fn))`.
 
 # Invariants and Constraints
 
@@ -82,6 +88,8 @@ Runnable usage lives in [examples/basic-usage.ts](../examples/basic-usage.ts),
   or `.multi(...)`, plus `id` when it participates in `.multi(...)`.
 - Declared unique indexes are enforced by SQLite at write time and during store
   open when kindstore reconciles schema state.
+- `prepareConstraints` runs before declared constraints are materialized; its
+  limited collection surface does not include `putByUnique`.
 - Tags are part of persisted identity. Changing a tag is a structural
   migration, not a cosmetic rename.
 - `id` is store-owned and `data` is reserved for storage.
@@ -113,6 +121,8 @@ Runnable usage lives in [examples/basic-usage.ts](../examples/basic-usage.ts),
   ordering.
 - Structural migration: a store-level change to kind ownership or tagged
   identity.
+- Constraint preparation migration: a named store-level data repair that runs
+  before declared indexes and constraints are materialized.
 - Payload migration: a kind-level rewrite from one document version to the
   next.
 

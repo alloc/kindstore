@@ -11,7 +11,10 @@ Use this skill as a router, not as the primary documentation surface.
 - Read `node_modules/kindstore/docs/context.md` for the stable mental model,
   constraints, and task-to-API map.
 - Read `node_modules/kindstore/docs/query-and-collection-semantics.md` for
-  caller-visible query, write, unique-index, and `putByUnique(...)` behavior.
+  caller-visible query, write, unique-index, `prepareConstraints(...)`, and
+  `putByUnique(...)` behavior.
+- Read `node_modules/kindstore/docs/migration-pipeline.md` when advising on
+  payload migrations, structural migrations, or pre-constraint data repair.
 - Run `node_modules/kindstore/examples/basic-usage.ts`,
   `node_modules/kindstore/examples/indexed-queries.ts`, and
   `node_modules/kindstore/examples/metadata-and-batch.ts`, and

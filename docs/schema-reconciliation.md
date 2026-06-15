@@ -85,6 +85,11 @@ The important public concepts are:
 
 The planner is about structural ownership, not payload rewriting.
 
+The same `migrate(planner)` callback may also register
+`prepareConstraints(id, fn)` migrations. Those are not structural ownership
+operations. They are data repairs that run after current tables and generated
+columns exist, but before declared indexes and constraints are materialized.
+
 ## Meaning of each structural operation
 
 ### Rename
@@ -144,6 +149,13 @@ Payload migration answers a different question:
 
 Maintainers should preserve that separation.
 
+`prepareConstraints` answers a third, narrower question:
+
+- how existing rows should be repaired so declared constraints can be created
+
+It should not be used to imply kind ownership, tag changes, or payload version
+history.
+
 ## What reconciliation should not do
 
 Structural reconciliation should not:
@@ -151,6 +163,7 @@ Structural reconciliation should not:
 - silently discard primary data without explicit intent
 - infer kind identity changes from guesswork
 - act as a replacement for payload migrations
+- act as a replacement for `prepareConstraints` data repair before constraints
 - expose library-owned structural history as ordinary application data
 
 ## Invariants maintainers must preserve

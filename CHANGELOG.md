@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.0
+
+- Added store-level `m.prepareConstraints(id, fn)` migrations, which run during store open after current tables and generated columns are available but before declared indexes and unique constraints are materialized.
+
 ## 0.4.4
 
 - Added declared unique index support through `.index(..., { unique: true })` and `.multi(..., ..., { unique: true })`.
