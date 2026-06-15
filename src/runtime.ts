@@ -329,6 +329,9 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
       for (const definition of this.kinds.values()) {
         this.ensureKindTable(definition);
         this.ensureGeneratedColumns(definition);
+      }
+      this.runConstraintMigrations();
+      for (const definition of this.kinds.values()) {
         this.reconcileIndexes(definition, previousSnapshot?.kinds[definition.key]);
         this.dropStaleGeneratedColumns(definition, previousSnapshot?.kinds[definition.key]);
         this.migrateKind(definition);
@@ -633,6 +636,24 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
       };
     }
     return db as ConstraintMigrationStore<any>;
+  }
+
+  private runConstraintMigrations() {
+    if (!this.schemaPlan.constraintMigrations.length) {
+      return;
+    }
+    const completed = this.internal.getCompletedConstraintMigrationIds();
+    const pending = this.schemaPlan.constraintMigrations.filter(({ id }) => !completed.has(id));
+    if (!pending.length) {
+      return;
+    }
+    const db = this.createConstraintMigrationStore();
+    const now = Date.now();
+    for (const { id, migration } of pending) {
+      migration({ db, raw: this.database, now });
+      completed.add(id);
+    }
+    this.internal.setCompletedConstraintMigrationIds(completed);
   }
 
   private migrateKind<T extends Kind>(definition: KindRuntimeDefinition<T>) {
