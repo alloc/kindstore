@@ -34,11 +34,11 @@
   "scripts": {
     "dev": "tsdown --sourcemap --watch",
     "build": "tsdown",
-    "docs:check": "pnpm build && bun run examples/basic-usage.ts && bun run examples/indexed-queries.ts && bun run examples/metadata-and-batch.ts && bun run examples/unique-writes.ts",
+    "docs:check": "bun run build && bun run examples/basic-usage.ts && bun run examples/indexed-queries.ts && bun run examples/metadata-and-batch.ts && bun run examples/unique-writes.ts",
     "format": "oxfmt .",
     "lint": "oxlint src",
     "test": "bun test",
-    "prepublishOnly": "pnpm build"
+    "prepublishOnly": "bun run build"
   },
   "dependencies": {
     "ulid": "^3.0.2"
