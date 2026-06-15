@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { kind, kindstore } from "../src/index";
 
-describe("kindstore", () => {
+describe("kindstore schema reconciliation", () => {
   test("reconciles stale derived indexes and generated columns from the previous snapshot", () => {
     const filename = `file:kindstore-reconcile-${crypto.randomUUID()}?mode=memory&cache=shared`;
     const Session = z.object({
