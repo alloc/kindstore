@@ -5,6 +5,7 @@ import { kindstore } from "../src/index";
 import type { KindBuilder } from "../src/kind";
 import { kind } from "../src/kind";
 import type {
+  ConstraintMigrationContext,
   DatabaseOptions,
   FindManyOptions,
   FindPageOptions,
@@ -212,6 +213,26 @@ test("type-level validation of kindstore constructor", () => {
     metadata: { preferences: Preferences },
     migrate(m) {
       m.rename("legacyTasks", "tasks");
+      m.prepareConstraints("2026-06-prepare-task-constraints", ({ db, raw, now }) => {
+        expectTypeOf(now).toBeNumber();
+        expectTypeOf(raw.query("SELECT 1")).toBeObject();
+        expectTypeOf(db.tasks.findMany()).toEqualTypeOf<
+          Array<{
+            id: `tsk_${string}`;
+            title: string;
+            status: "todo" | "doing" | "done";
+          }>
+        >();
+        db.tasks.delete("tsk_123");
+
+        if (false) {
+          // @ts-expect-error - unique constraints may not exist during preparation
+          db.users.putByUnique({ email: "jane@example.com" }, { email: "jane@example.com" });
+
+          // @ts-expect-error - the migration-time store is not a fully opened store
+          db.close();
+        }
+      });
     },
     schema: {
       tasks: kind("tsk", Task).index("status"),
@@ -273,6 +294,7 @@ test("type-level validation of kindstore constructor", () => {
 
   type TaskInput = KindInput<typeof db.schema.tasks>;
   type TaskOutput = KindOutput<typeof db.schema.tasks>;
+  type ConstraintContext = ConstraintMigrationContext<typeof db.schema>;
   expectTypeOf<TaskInput>().toEqualTypeOf<{
     title: string;
     status: "todo" | "doing" | "done";
@@ -282,6 +304,7 @@ test("type-level validation of kindstore constructor", () => {
     title: string;
     status: "todo" | "doing" | "done";
   }>();
+  expectTypeOf<ConstraintContext["db"]["tasks"].findMany>().returns.toEqualTypeOf<TaskOutput[]>();
 
   if (false) {
     // @ts-expect-error - resolve only accepts IDs from declared kinds

@@ -10,6 +10,13 @@ import type {
   SchemaDefinition,
 } from "./types";
 
+type InferKinds<TKinds extends KindRegistry> = {
+  [K in keyof TKinds as TKinds[K] extends KindBuilder<any> ? K : never]: Extract<
+    TKinds[K],
+    KindBuilder<any>
+  >;
+};
+
 type AnyStoreInput<
   TKinds extends KindRegistry = KindRegistry,
   TMetadata extends MetadataDefinitionMap = MetadataDefinitionMap,
@@ -17,19 +24,12 @@ type AnyStoreInput<
   filename: string;
   databaseOptions?: DatabaseOptions;
   metadata?: TMetadata;
-  migrate?: SchemaDefinition["migrate"];
+  migrate?: SchemaDefinition<InferKinds<TKinds>>["migrate"];
   schema: keyof TKinds extends never ? never : TKinds;
 };
 
 type Exact<TShape, TObject extends TShape> = TShape &
   Record<Exclude<keyof TObject, keyof TShape>, never>;
-
-type InferKinds<TKinds extends KindRegistry> = {
-  [K in keyof TKinds as TKinds[K] extends KindBuilder<any> ? K : never]: Extract<
-    TKinds[K],
-    KindBuilder<any>
-  >;
-};
 
 /**
  * Opens a kindstore instance against a SQLite database.

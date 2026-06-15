@@ -4,6 +4,7 @@ import { monotonicFactory } from "ulid";
 import { UnrecoverableStoreOpenError } from "./errors";
 import { KindBuilder } from "./kind";
 import type {
+  ConstraintMigration,
   DatabaseOptions,
   FindManyOptions,
   FindPageOptions,
@@ -111,6 +112,10 @@ type SchemaPlan = {
   drops: Set<string>;
   renames: Map<string, string>;
   retags: Map<string, string>;
+  constraintMigrations: Array<{
+    id: string;
+    migration: ConstraintMigration<any>;
+  }>;
 };
 
 type CompiledQuery = {
@@ -1133,6 +1138,7 @@ class InternalMetadataRuntime {
 
 function normalizeSchemaPlan(schemaDefinition: SchemaDefinition | undefined): SchemaPlan {
   const plan: SchemaPlan = {
+    constraintMigrations: [],
     drops: new Set(),
     renames: new Map(),
     retags: new Map(),
@@ -1195,6 +1201,17 @@ class SchemaMigrationPlannerRuntime {
       throw new Error(`Schema migration already defines a retag for kind "${kindKey}".`);
     }
     this.plan.retags.set(kindKey, previousTag);
+    return this;
+  }
+
+  prepareConstraints(id: string, migration: ConstraintMigration<any>) {
+    if (!id) {
+      throw new Error("Constraint preparation migration id must be non-empty.");
+    }
+    if (this.plan.constraintMigrations.some((entry) => entry.id === id)) {
+      throw new Error(`Constraint preparation migration "${id}" is already defined.`);
+    }
+    this.plan.constraintMigrations.push({ id, migration });
     return this;
   }
 }

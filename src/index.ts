@@ -6,6 +6,10 @@ export type { KindCollection, Kindstore, MetadataCollection } from "./runtime";
 export type { MetadataSchemas } from "./store";
 export type {
   DatabaseOptions,
+  ConstraintMigration,
+  ConstraintMigrationCollection,
+  ConstraintMigrationContext,
+  ConstraintMigrationStore,
   FilterOperators,
   FindManyOptions,
   FindPageOptions,

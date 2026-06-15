@@ -1,4 +1,4 @@
-import type { DatabaseOptions } from "bun:sqlite";
+import type { Database, DatabaseOptions } from "bun:sqlite";
 import type { z } from "zod";
 
 import type { KindBuilder } from "./kind";
@@ -167,20 +167,75 @@ export type KindMigration<T extends Kind> = (
 /** Zod schema map for store-level application metadata. */
 export type MetadataDefinitionMap = Record<string, z.ZodTypeAny>;
 
+/** Map of collection keys to declared kind builders. */
+export type KindRegistry = Record<string, KindBuilder<any>>;
+
+/** Collection APIs available while preparing stored data for declared constraints. */
+export type ConstraintMigrationCollection<T extends KindLike> = {
+  /** Returns a fresh opaque ID tagged for this kind. */
+  newId(): KindId<T>;
+  /** Allocates an ID, validates the payload, and inserts one new document. */
+  create(value: KindInput<T>): KindOutput<T>;
+  /** Reads one validated document by ID, or `undefined` if it does not exist. */
+  get(id: KindId<T>): KindOutput<T> | undefined;
+  /** Replaces the stored payload for `id`, inserting on the first write. */
+  put(id: KindId<T>, value: KindInput<T>): KindOutput<T>;
+  /** Removes one document and returns whether anything was deleted. */
+  delete(id: KindId<T>): boolean;
+  /** Performs an atomic read-modify-write using a shallow patch or updater. */
+  update(
+    id: KindId<T>,
+    updater: PatchValue<KindInput<T>> | ((current: KindOutput<T>) => KindInput<T>),
+  ): KindOutput<T> | undefined;
+  /** Returns the first matching document, or `undefined` when no row matches. */
+  first(options?: FindManyOptions<T>): KindOutput<T> | undefined;
+  /** Materializes all matching documents into memory. */
+  findMany(options?: FindManyOptions<T>): KindOutput<T>[];
+  /**
+   * Returns one forward-only page of documents and an optional cursor for the
+   * next page.
+   */
+  findPage(options: FindPageOptions<T>): FindPageResult<T>;
+  /** Lazily iterates matching documents without materializing the full result set. */
+  iterate(options?: FindManyOptions<T>): IterableIterator<KindOutput<T>>;
+};
+
+/** Store surface available while preparing stored data for declared constraints. */
+export type ConstraintMigrationStore<TKinds extends KindRegistry> = {
+  [K in keyof TKinds]: ConstraintMigrationCollection<TKinds[K]>;
+};
+
+/** Context passed to one store-level constraint preparation migration. */
+export type ConstraintMigrationContext<TKinds extends KindRegistry = KindRegistry> = {
+  /** Current declared collections, limited to APIs safe before constraints are reconciled. */
+  readonly db: ConstraintMigrationStore<TKinds>;
+  /** Underlying SQLite database connection for repair logic outside typed collections. */
+  readonly raw: Database;
+  /** Store-managed timestamp captured for the current migration run. */
+  readonly now: number;
+};
+
+/** Store-level migration run before declared constraints are materialized. */
+export type ConstraintMigration<TKinds extends KindRegistry = KindRegistry> = (
+  context: ConstraintMigrationContext<TKinds>,
+) => void;
+
 /** Planner used by top-level structural migrations. */
-export interface SchemaMigrationPlanner {
+export interface SchemaMigrationPlanner<TKinds extends KindRegistry = KindRegistry> {
   /** Declares that a current kind continues a previous kind under a new key. */
   rename(previousKindKey: string, nextKindKey: string): this;
   /** Declares that a previous kind should be removed. */
   drop(previousKindKey: string): this;
   /** Declares the previous tag for a current kind whose IDs changed prefix. */
   retag(kindKey: string, previousTag: string): this;
+  /** Declares a named data repair step that runs before constraints are materialized. */
+  prepareConstraints(id: string, migration: ConstraintMigration<TKinds>): this;
 }
 
 /** Store-level structural migration declaration executed during open. */
-export type SchemaDefinition = {
+export type SchemaDefinition<TKinds extends KindRegistry = KindRegistry> = {
   /** Populates the structural migration plan for this store open. */
-  migrate(planner: SchemaMigrationPlanner): void;
+  migrate(planner: SchemaMigrationPlanner<TKinds>): void;
 };
 
 export type { DatabaseOptions };
@@ -189,6 +244,3 @@ export type { DatabaseOptions };
 export type MetadataValue<T extends MetadataDefinitionMap, K extends keyof T & string> = z.output<
   T[K]
 >;
-
-/** Map of collection keys to declared kind builders. */
-export type KindRegistry = Record<string, KindBuilder<any>>;
