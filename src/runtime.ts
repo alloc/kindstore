@@ -48,6 +48,7 @@ const APP_METADATA_TABLE = "__kindstore_app_metadata";
 const STORE_FORMAT_VERSION_KEY = "store_format_version";
 const KIND_VERSIONS_KEY = "kind_versions";
 const SCHEMA_SNAPSHOT_KEY = "schema_snapshot";
+const CONSTRAINT_MIGRATIONS_KEY = "constraint_migrations";
 const RESERVED_STORE_KEYS = new Set(["batch", "close", "metadata", "raw", "resolve", "schema"]);
 const RESERVED_ROW_COLUMNS = new Set(["id", "data"]);
 const nextUlid = monotonicFactory();
@@ -1113,6 +1114,23 @@ class InternalMetadataRuntime {
 
   setSchemaSnapshot(snapshot: StoreSchemaSnapshot) {
     this.set(SCHEMA_SNAPSHOT_KEY, snapshot);
+  }
+
+  getCompletedConstraintMigrationIds() {
+    const ids = this.get(CONSTRAINT_MIGRATIONS_KEY);
+    if (ids == null) {
+      return new Set<string>();
+    }
+    if (!Array.isArray(ids) || ids.some((id) => typeof id !== "string" || !id)) {
+      throw new UnrecoverableStoreOpenError(
+        `Internal metadata key "${CONSTRAINT_MIGRATIONS_KEY}" is malformed.`,
+      );
+    }
+    return new Set(ids);
+  }
+
+  setCompletedConstraintMigrationIds(ids: ReadonlySet<string>) {
+    this.set(CONSTRAINT_MIGRATIONS_KEY, Array.from(ids).sort());
   }
 
   private getKindVersions() {

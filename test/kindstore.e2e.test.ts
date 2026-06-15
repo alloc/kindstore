@@ -1371,6 +1371,19 @@ describe("kindstore", () => {
         },
       }),
     ).toThrow('rename from "sessions" to itself');
+
+    expect(() =>
+      kindstore({
+        filename,
+        migrate(m) {
+          m.prepareConstraints("dedupe-sessions", () => {});
+          m.prepareConstraints("dedupe-sessions", () => {});
+        },
+        schema: {
+          sessions: kind("ses", Session).index("userId"),
+        },
+      }),
+    ).toThrow('Constraint preparation migration "dedupe-sessions" is already defined.');
   });
 
   test("drops a previous kind when authorized by migrate", () => {
