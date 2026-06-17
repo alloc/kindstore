@@ -68,6 +68,7 @@ const db = kindstore({
   migrate(m) {
     m.rename("legacySessions", "sessions");
     m.drop("obsoleteCache");
+    m.preserve("optionalDrafts");
     m.retag("users", "usr");
   },
   schema: {
@@ -81,6 +82,7 @@ The important public concepts are:
 
 - `rename(previousKindKey, nextKindKey)`
 - `drop(previousKindKey)`
+- `preserve(previousKindKey)`
 - `retag(kindKey, previousTag)`
 
 The planner is about structural ownership, not payload rewriting.
@@ -109,6 +111,21 @@ than carried forward.
 This is the explicit destructive path. kindstore must not assume deletion just
 because a previous kind is absent from the current declaration.
 
+### Preserve
+
+Preserve tells kindstore that a previously persisted kind is intentionally
+absent from the current declaration and should remain dormant.
+
+This is the explicit non-destructive path for optional modules or feature
+packages. The preserved kind keeps its owned table, payload rows, structural
+history, and payload version metadata, but it is not exposed on the public typed
+store surface and does not participate in `resolve(id)`.
+
+Preservation is not a schema upgrade. kindstore does not run payload migrations
+or reconcile current derived query support for a kind while it is dormant. If
+the same kind key is declared in a later open, it becomes active again and then
+uses the normal active-kind reconciliation and eager payload migration pipeline.
+
 ### Retag
 
 Retag tells kindstore that a kind's ID tag has intentionally changed while the
@@ -127,6 +144,8 @@ That includes cases such as:
 - referring to kinds that are not relevant to the current diff
 - declaring multiple structural operations for the same prior kind
 - mapping multiple prior kinds to the same current kind
+- preserving a kind that is still declared in the current registry
+- declaring a current kind that reuses a preserved kind's owned table or ID tag
 - declaring a retag where no tag change actually needs authorization
 
 The goal is to keep structural intent precise and auditable.
@@ -139,6 +158,7 @@ Structural reconciliation answers questions like:
 
 - which kind owns these rows now
 - whether a prior kind is being removed
+- whether a prior kind is being preserved as dormant
 - whether the persisted identity of a kind has changed
 - what derived query support should exist
 

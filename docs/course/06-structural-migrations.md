@@ -64,13 +64,36 @@ identified?
 - `rename(previousKindKey, nextKindKey)`: current kind continues a previous
   kind under a new registry key.
 - `drop(previousKindKey)`: explicitly remove a previous kind.
+- `preserve(previousKindKey)`: keep an omitted previous kind dormant for a
+  future declaration without exposing it on the current typed store.
 - `retag(kindKey, previousTag)`: keep the same logical kind but change the ID
   tag prefix.
+
+For optional modules or feature packages, use preserve when the current process
+intentionally omits a previous kind but still owns its data:
+
+```ts
+const db = kindstore({
+  filename: "app.sqlite",
+  migrate(m) {
+    m.preserve("drafts");
+  },
+  schema: {
+    tasks: kind("tsk", Task),
+  },
+});
+```
+
+While preserved, `drafts` keeps its table, rows, structural history, and payload
+version metadata. It is not available as `db.drafts`, does not participate in
+`db.resolve(id)`, and does not run payload migrations until `drafts` is declared
+again.
 
 ## Keep in mind
 
 - kindstore fails store open when this intent is required but missing.
 - Tag changes are structural because the tag is part of persisted identity.
+- Preserved dormant kinds reserve their owned table and ID tag while omitted.
 - Index additions or removals are still automatic derived-structure changes.
 
 ## Executable references

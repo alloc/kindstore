@@ -46,8 +46,13 @@ Its job is to decide:
 - what can be derived and reconciled automatically
 - what requires explicit structural intent from the caller
 
-This is where kind renames, deletions, tag changes, and derived query-support
-changes are handled.
+This is where kind renames, deletions, dormant preservation, tag changes, and
+derived query-support changes are handled.
+
+Preserved dormant kinds remain in structural history but are not current
+declared collections. They are skipped by later constraint preparation, index
+reconciliation, and eager payload migration work until the same kind key is
+declared again in a later open.
 
 ### Constraint preparation migrations
 
@@ -86,7 +91,8 @@ At a high level, opening a store follows this sequence:
    to understand what already exists.
 3. Bring the store forward to the current library-owned format, if needed.
 4. Reconcile structural differences between the previous declared shape and the
-   current one, ensuring current tables and generated columns exist.
+   current one, preserving any explicitly dormant previous kinds and ensuring
+   current tables and generated columns exist.
 5. Run pending `prepareConstraints` migrations in declaration order.
 6. Materialize declared indexes and constraints.
 7. Run eager payload migrations for currently declared kinds.

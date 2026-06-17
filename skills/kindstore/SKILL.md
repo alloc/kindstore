@@ -14,7 +14,8 @@ Use this skill as a router, not as the primary documentation surface.
   caller-visible query, write, unique-index, `prepareConstraints(...)`, and
   `putByUnique(...)` behavior.
 - Read `node_modules/kindstore/docs/migration-pipeline.md` when advising on
-  payload migrations, structural migrations, or pre-constraint data repair.
+  payload migrations, structural migrations, dormant kind preservation, or
+  pre-constraint data repair.
 - Run `node_modules/kindstore/examples/basic-usage.ts`,
   `node_modules/kindstore/examples/indexed-queries.ts`, and
   `node_modules/kindstore/examples/metadata-and-batch.ts`, and
