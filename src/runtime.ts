@@ -113,6 +113,7 @@ type StoreSchemaSnapshot = {
 
 type SchemaPlan = {
   drops: Set<string>;
+  preserves: Set<string>;
   renames: Map<string, string>;
   retags: Map<string, string>;
   constraintMigrations: Array<{
@@ -1201,6 +1202,7 @@ function normalizeSchemaPlan(schemaDefinition: SchemaDefinition | undefined): Sc
   const plan: SchemaPlan = {
     constraintMigrations: [],
     drops: new Set(),
+    preserves: new Set(),
     renames: new Map(),
     retags: new Map(),
   };
@@ -1227,7 +1229,7 @@ class SchemaMigrationPlannerRuntime {
         `Schema migration rename from "${previousKindKey}" to itself is not allowed.`,
       );
     }
-    if (this.plan.drops.has(previousKindKey) || this.plan.renames.has(previousKindKey)) {
+    if (this.hasPreviousKindOperation(previousKindKey)) {
       throw new Error(
         `Schema migration already defines an operation for previous kind "${previousKindKey}".`,
       );
@@ -1245,12 +1247,25 @@ class SchemaMigrationPlannerRuntime {
     if (!previousKindKey) {
       throw new Error("Schema migration drop key must be non-empty.");
     }
-    if (this.plan.renames.has(previousKindKey) || this.plan.drops.has(previousKindKey)) {
+    if (this.hasPreviousKindOperation(previousKindKey)) {
       throw new Error(
         `Schema migration already defines an operation for previous kind "${previousKindKey}".`,
       );
     }
     this.plan.drops.add(previousKindKey);
+    return this;
+  }
+
+  preserve(previousKindKey: string) {
+    if (!previousKindKey) {
+      throw new Error("Schema migration preserve key must be non-empty.");
+    }
+    if (this.hasPreviousKindOperation(previousKindKey)) {
+      throw new Error(
+        `Schema migration already defines an operation for previous kind "${previousKindKey}".`,
+      );
+    }
+    this.plan.preserves.add(previousKindKey);
     return this;
   }
 
@@ -1274,6 +1289,14 @@ class SchemaMigrationPlannerRuntime {
     }
     this.plan.constraintMigrations.push({ id, migration });
     return this;
+  }
+
+  private hasPreviousKindOperation(previousKindKey: string) {
+    return (
+      this.plan.renames.has(previousKindKey) ||
+      this.plan.drops.has(previousKindKey) ||
+      this.plan.preserves.has(previousKindKey)
+    );
   }
 }
 

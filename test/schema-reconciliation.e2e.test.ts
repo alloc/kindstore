@@ -153,6 +153,57 @@ describe("kindstore schema reconciliation", () => {
       kindstore({
         filename,
         migrate(m) {
+          m.preserve("");
+        },
+        schema: {
+          sessions: kind("ses", Session).index("userId"),
+        },
+      }),
+    ).toThrow("Schema migration preserve key must be non-empty.");
+
+    expect(() =>
+      kindstore({
+        filename,
+        migrate(m) {
+          m.preserve("sessions");
+          m.preserve("sessions");
+        },
+        schema: {
+          sessions: kind("ses", Session).index("userId"),
+        },
+      }),
+    ).toThrow('Schema migration already defines an operation for previous kind "sessions".');
+
+    expect(() =>
+      kindstore({
+        filename,
+        migrate(m) {
+          m.drop("sessions");
+          m.preserve("sessions");
+        },
+        schema: {
+          sessions: kind("ses", Session).index("userId"),
+        },
+      }),
+    ).toThrow('Schema migration already defines an operation for previous kind "sessions".');
+
+    expect(() =>
+      kindstore({
+        filename,
+        migrate(m) {
+          m.preserve("sessions");
+          m.rename("sessions", "authSessions");
+        },
+        schema: {
+          sessions: kind("ses", Session).index("userId"),
+        },
+      }),
+    ).toThrow('Schema migration already defines an operation for previous kind "sessions".');
+
+    expect(() =>
+      kindstore({
+        filename,
+        migrate(m) {
           m.prepareConstraints("dedupe-sessions", () => {});
           m.prepareConstraints("dedupe-sessions", () => {});
         },

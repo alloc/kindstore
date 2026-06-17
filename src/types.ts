@@ -226,6 +226,8 @@ export interface SchemaMigrationPlanner<TKinds extends KindRegistry = KindRegist
   rename(previousKindKey: string, nextKindKey: string): this;
   /** Declares that a previous kind should be removed. */
   drop(previousKindKey: string): this;
+  /** Declares that a missing previous kind should remain dormant. */
+  preserve(previousKindKey: string): this;
   /** Declares the previous tag for a current kind whose IDs changed prefix. */
   retag(kindKey: string, previousTag: string): this;
   /** Declares a named data repair step that runs before constraints are materialized. */
