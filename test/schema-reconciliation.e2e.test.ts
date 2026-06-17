@@ -293,6 +293,133 @@ describe("kindstore schema reconciliation", () => {
     }
   });
 
+  test("reactivates a preserved kind through the normal active-kind pipeline", () => {
+    const filename = `file:kindstore-reactivate-${crypto.randomUUID()}?mode=memory&cache=shared`;
+    const TaskV1 = z.object({
+      title: z.string(),
+      priority: z.number().int(),
+    });
+    const User = z.object({
+      email: z.string(),
+    });
+    const initial = kindstore({
+      filename,
+      schema: {
+        tasks: kind("tsk", TaskV1).index("priority", { type: "integer" }),
+      },
+    });
+    const taskId = initial.tasks.newId();
+    initial.tasks.put(taskId, {
+      title: "Ship preserve",
+      priority: 3,
+    });
+
+    const preserved = kindstore({
+      filename,
+      migrate(m) {
+        m.preserve("tasks");
+      },
+      schema: {
+        users: kind("usr", User),
+      },
+    });
+    preserved.close();
+
+    const TaskV2 = z.object({
+      title: z.string(),
+      status: z.enum(["open", "done"]),
+    });
+    const reactivated = kindstore({
+      filename,
+      schema: {
+        tasks: kind("tsk", TaskV2).index("status").migrate(2, {
+          1: (value) => ({
+            ...value,
+            status: "open",
+          }),
+        }),
+        users: kind("usr", User),
+      },
+    });
+    const task = reactivated.tasks.get(taskId);
+    expect(task).toEqual({
+      id: taskId,
+      title: "Ship preserve",
+      status: "open",
+    });
+    expect(reactivated.resolve(taskId)).toEqual(task);
+    expect(reactivated.tasks.first({ where: { status: "open" } })).toEqual(task);
+    expect(
+      (
+        reactivated.raw.query(`PRAGMA table_xinfo('tasks')`).all() as { name: string }[]
+      ).map((column) => column.name),
+    ).toEqual(["id", "data", "status"]);
+    expect(
+      (
+        reactivated.raw
+          .query(
+            `SELECT "name" FROM "sqlite_master" WHERE "type" = 'index' AND "tbl_name" = 'tasks' ORDER BY "name" ASC`,
+          )
+          .all() as { name: string }[]
+      )
+        .map((index) => index.name)
+        .filter((name) => !name.startsWith("sqlite_autoindex_")),
+    ).toEqual(["idx_tasks_status"]);
+    expect(
+      reactivated.raw
+        .query(`SELECT "payload" FROM "__kindstore_internal" WHERE "key" = 'kind_versions'`)
+        .get(),
+    ).toEqual({ payload: '{"tasks":2,"users":1}' });
+    reactivated.close();
+    initial.close();
+  });
+
+  test("preserved kind reactivation keeps payload version downgrade protection", () => {
+    const filename = `file:kindstore-reactivate-downgrade-${crypto.randomUUID()}?mode=memory&cache=shared`;
+    const TaskV2 = z.object({
+      title: z.string(),
+      status: z.enum(["open", "done"]),
+    });
+    const User = z.object({
+      email: z.string(),
+    });
+    const initial = kindstore({
+      filename,
+      schema: {
+        tasks: kind("tsk", TaskV2).migrate(2, {}),
+      },
+    });
+    initial.tasks.create({
+      title: "Already v2",
+      status: "open",
+    });
+
+    const preserved = kindstore({
+      filename,
+      migrate(m) {
+        m.preserve("tasks");
+      },
+      schema: {
+        users: kind("usr", User),
+      },
+    });
+    preserved.close();
+
+    const TaskV1 = z.object({
+      title: z.string(),
+    });
+    expect(() =>
+      kindstore({
+        filename,
+        schema: {
+          tasks: kind("tsk", TaskV1),
+          users: kind("usr", User),
+        },
+      }),
+    ).toThrow("Kind \"tasks\" is at version 2, but the registry declares version 1.");
+    initial.close();
+  });
+
   test("renames a previous kind when authorized by migrate", () => {
     const filename = `file:kindstore-rename-${crypto.randomUUID()}?mode=memory&cache=shared`;
     const Session = z.object({
