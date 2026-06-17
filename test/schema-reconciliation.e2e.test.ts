@@ -164,6 +164,135 @@ describe("kindstore schema reconciliation", () => {
     initial.close();
   });
 
+  test("rejects preserve declarations that conflict with current or unknown kinds", () => {
+    const Session = z.object({
+      userId: z.string(),
+    });
+    const User = z.object({
+      email: z.string(),
+    });
+
+    {
+      const filename = `file:kindstore-preserve-current-${crypto.randomUUID()}?mode=memory&cache=shared`;
+      const initial = kindstore({
+        filename,
+        schema: {
+          sessions: kind("ses", Session),
+        },
+      });
+      expect(() =>
+        kindstore({
+          filename,
+          migrate(m) {
+            m.preserve("sessions");
+          },
+          schema: {
+            sessions: kind("ses", Session),
+          },
+        }),
+      ).toThrow('Schema migration preserve source "sessions" still exists');
+      const reopened = kindstore({
+        filename,
+        schema: {
+          sessions: kind("ses", Session),
+        },
+      });
+      reopened.close();
+      initial.close();
+    }
+
+    {
+      const filename = `file:kindstore-preserve-unknown-${crypto.randomUUID()}?mode=memory&cache=shared`;
+      const initial = kindstore({
+        filename,
+        schema: {
+          sessions: kind("ses", Session),
+        },
+      });
+      expect(() =>
+        kindstore({
+          filename,
+          migrate(m) {
+            m.preserve("missing");
+          },
+          schema: {
+            users: kind("usr", User),
+          },
+        }),
+      ).toThrow('Schema migration preserve references unknown previous kind "missing".');
+      const reopened = kindstore({
+        filename,
+        schema: {
+          sessions: kind("ses", Session),
+        },
+      });
+      reopened.close();
+      initial.close();
+    }
+
+    {
+      const filename = `file:kindstore-preserve-table-conflict-${crypto.randomUUID()}?mode=memory&cache=shared`;
+      const initial = kindstore({
+        filename,
+        schema: {
+          auth_sessions: kind("ses", Session),
+        },
+      });
+      expect(() =>
+        kindstore({
+          filename,
+          migrate(m) {
+            m.preserve("auth_sessions");
+          },
+          schema: {
+            authSessions: kind("usr", User),
+          },
+        }),
+      ).toThrow(
+        'Current kind "authSessions" cannot use table "auth_sessions" because it belongs to preserved kind "auth_sessions".',
+      );
+      const reopened = kindstore({
+        filename,
+        schema: {
+          auth_sessions: kind("ses", Session),
+        },
+      });
+      reopened.close();
+      initial.close();
+    }
+
+    {
+      const filename = `file:kindstore-preserve-tag-conflict-${crypto.randomUUID()}?mode=memory&cache=shared`;
+      const initial = kindstore({
+        filename,
+        schema: {
+          sessions: kind("ses", Session),
+        },
+      });
+      expect(() =>
+        kindstore({
+          filename,
+          migrate(m) {
+            m.preserve("sessions");
+          },
+          schema: {
+            users: kind("ses", User),
+          },
+        }),
+      ).toThrow(
+        'Current kind "users" cannot use tag "ses" because it belongs to preserved kind "sessions".',
+      );
+      const reopened = kindstore({
+        filename,
+        schema: {
+          sessions: kind("ses", Session),
+        },
+      });
+      reopened.close();
+      initial.close();
+    }
+  });
+
   test("renames a previous kind when authorized by migrate", () => {
     const filename = `file:kindstore-rename-${crypto.randomUUID()}?mode=memory&cache=shared`;
     const Session = z.object({

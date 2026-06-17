@@ -389,6 +389,9 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
 
   private applySchemaMigrations(previousSnapshot: StoreSchemaSnapshot | undefined) {
     if (!previousSnapshot) {
+      for (const key of this.schemaPlan.preserves) {
+        throw new Error(`Schema migration preserve references unknown previous kind "${key}".`);
+      }
       return previousSnapshot;
     }
     const resolvedKinds: Record<string, SnapshotKind> = {};
@@ -399,6 +402,18 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
         resolvedKinds[key] = previous;
         consumedPrevious.add(key);
       }
+    }
+    for (const key of this.schemaPlan.preserves) {
+      const previous = previousSnapshot.kinds[key];
+      if (!previous) {
+        throw new Error(`Schema migration preserve references unknown previous kind "${key}".`);
+      }
+      if (this.kinds.has(key)) {
+        throw new Error(
+          `Schema migration preserve source "${key}" still exists in the current registry.`,
+        );
+      }
+      this.validatePreservedKindOwnership(key, previous);
     }
     for (const [previousKey, nextKey] of this.schemaPlan.renames) {
       const previous = previousSnapshot.kinds[previousKey];
@@ -465,6 +480,21 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
       kindstoreVersion: previousSnapshot.kindstoreVersion,
       kinds: resolvedKinds,
     };
+  }
+
+  private validatePreservedKindOwnership(previousKey: string, previous: SnapshotKind) {
+    for (const [key, current] of this.kinds) {
+      if (current.table === previous.table) {
+        throw new Error(
+          `Current kind "${key}" cannot use table "${current.table}" because it belongs to preserved kind "${previousKey}".`,
+        );
+      }
+      if (current.definition.tag === previous.tag) {
+        throw new Error(
+          `Current kind "${key}" cannot use tag "${current.definition.tag}" because it belongs to preserved kind "${previousKey}".`,
+        );
+      }
+    }
   }
 
   private renameKind<T extends Kind>(
