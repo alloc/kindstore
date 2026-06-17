@@ -89,6 +89,81 @@ describe("kindstore schema reconciliation", () => {
     initial.close();
   });
 
+  test("preserves a missing previous kind as dormant when authorized by migrate", () => {
+    const filename = `file:kindstore-preserve-${crypto.randomUUID()}?mode=memory&cache=shared`;
+    const Session = z.object({
+      userId: z.string(),
+    });
+    const User = z.object({
+      email: z.string(),
+    });
+    const initial = kindstore({
+      filename,
+      schema: {
+        sessions: kind("ses", Session).index("userId"),
+      },
+    });
+    const sessionId = initial.sessions.newId();
+    initial.sessions.put(sessionId, {
+      userId: "usr_1",
+    });
+
+    const preserved = kindstore({
+      filename,
+      migrate(m) {
+        m.preserve("sessions");
+      },
+      schema: {
+        users: kind("usr", User).index("email"),
+      },
+    });
+    expect("sessions" in preserved).toBe(false);
+    expect(preserved.raw.query(`SELECT "id", "data" FROM "sessions"`).all()).toEqual([
+      {
+        id: sessionId,
+        data: '{"userId":"usr_1"}',
+      },
+    ]);
+    expect(() => preserved.resolve(sessionId as never)).toThrow(
+      `No kind is registered for tag "ses" from ID "${sessionId}".`,
+    );
+    const kindVersions = JSON.parse(
+      (
+        preserved.raw
+          .query(`SELECT "payload" FROM "__kindstore_internal" WHERE "key" = 'kind_versions'`)
+          .get() as { payload: string }
+      ).payload,
+    );
+    expect(kindVersions).toEqual({
+      sessions: 1,
+      users: 1,
+    });
+    const snapshot = JSON.parse(
+      (
+        preserved.raw
+          .query(`SELECT "payload" FROM "__kindstore_internal" WHERE "key" = 'schema_snapshot'`)
+          .get() as { payload: string }
+      ).payload,
+    );
+    expect(Object.keys(snapshot.kinds).sort()).toEqual(["sessions", "users"]);
+    expect(snapshot.kinds.sessions).toMatchObject({
+      tag: "ses",
+      table: "sessions",
+      version: 1,
+    });
+
+    expect(() =>
+      kindstore({
+        filename,
+        schema: {
+          users: kind("usr", User).index("email"),
+        },
+      }),
+    ).toThrow('Previous kind "sessions" is missing');
+    preserved.close();
+    initial.close();
+  });
+
   test("renames a previous kind when authorized by migrate", () => {
     const filename = `file:kindstore-rename-${crypto.randomUUID()}?mode=memory&cache=shared`;
     const Session = z.object({

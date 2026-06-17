@@ -337,7 +337,7 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
         this.dropStaleGeneratedColumns(definition, previousSnapshot?.kinds[definition.key]);
         this.migrateKind(definition);
       }
-      this.internal.setSchemaSnapshot(this.createSchemaSnapshot());
+      this.internal.setSchemaSnapshot(this.createSchemaSnapshot(previousSnapshot));
     })();
   }
 
@@ -431,6 +431,11 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
       }
       if (this.schemaPlan.drops.has(previousKey)) {
         this.dropKind(previousKey, previous);
+        consumedPrevious.add(previousKey);
+        continue;
+      }
+      if (this.schemaPlan.preserves.has(previousKey)) {
+        resolvedKinds[previousKey] = previous;
         consumedPrevious.add(previousKey);
         continue;
       }
@@ -608,8 +613,12 @@ class KindstoreRuntime<TMetadata extends MetadataDefinitionMap> {
     }
   }
 
-  private createSchemaSnapshot(): StoreSchemaSnapshot {
-    const kinds: Record<string, SnapshotKind> = {};
+  private createSchemaSnapshot(
+    previousSnapshot: StoreSchemaSnapshot | undefined,
+  ): StoreSchemaSnapshot {
+    const kinds: Record<string, SnapshotKind> = previousSnapshot
+      ? { ...previousSnapshot.kinds }
+      : {};
     for (const [key, definition] of this.kinds) {
       kinds[key] = snapshotKind(definition);
     }
