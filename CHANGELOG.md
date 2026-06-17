@@ -1,8 +1,11 @@
 # Changelog
 
-## 0.5.0
+## 0.4.6
 
 - Added store-level `m.preserve(previousKindKey)`, which keeps an omitted previous kind dormant without exposing it on the typed store surface or routing its IDs through `db.resolve(id)`.
+
+## 0.4.5
+
 - Added store-level `m.prepareConstraints(id, fn)` migrations, which run during store open after current tables and generated columns are available but before declared indexes and unique constraints are materialized.
 
 ## 0.4.4
